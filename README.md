@@ -1,4 +1,4 @@
-# 机械设计基础自测题库 (Mechanical Design Quiz)
+# 机械设计基础自测题库
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/b2c04d35-aa6e-002721b7d1bf/deploy-status)](https://app.netlify.com/sites/mechanicdesign/deploys)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
