@@ -5,7 +5,7 @@
 
 一个现代化的、响应式的机械设计基础课程自测刷题 Web 应用。专为浙江大学学生期末复习设计，提供丰富的题库和多种练习模式。
 
-👉 **在线体验**: [https://mechanicdesign.netlify.app/](https://mechanicdesign.netlify.app)
+👉 **在线体验**: [https://mechanicdesign.netlify.app](https://mechanicdesign.netlify.app)
 
 ## ✨ 主要功能
 
