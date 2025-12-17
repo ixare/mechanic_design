@@ -362,7 +362,7 @@ input:checked + .slider:before { transform: translateX(18px); }
     font-size: 1.1rem;
     font-weight: 600;
     margin-bottom: 1rem;
-    color: #000000;
+    color: var(--text-main);
 }
 
 .question-block ul {
@@ -415,13 +415,14 @@ input:checked + .slider:before { transform: translateX(18px); }
 }
 
 .answer-span {
+    display: none;
     color: var(--success);
     font-weight: 700;
     margin-left: 0.5rem;
 }
 
 .explanation-span {
-    display: block;
+    display: none;
     margin-top: 0.75rem;
     padding: 1rem;
     background-color: var(--surface-300);
