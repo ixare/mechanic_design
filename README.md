@@ -3,9 +3,9 @@
 [![Netlify Status](https://api.netlify.com/api/v1/badges/b2c04d35-aa6e-002721b7d1bf/deploy-status)](https://app.netlify.com/sites/mechanicdesign/deploys)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-一个现代化的、响应式的机械设计基础课程自测刷题 Web 应用。专为浙江大学学生期末复习设计，提供丰富的题库和多种练习模式。
+一个现代化的、响应式的机械设计基础课程自测刷题 Web 应用。专为浙江大学*机械设计基础*课程期末复习设计，提供题库和多种练习模式。
 
-👉 **在线体验**: [机械设计基础自测题库](https://mechanicdesign.netlify.app)
+👉 **在线使用**: [机械设计基础自测题库](https://mechanicdesign.netlify.app)
 
 ## ✨ 主要功能
 
@@ -39,7 +39,7 @@
 
 ## 🛠️ 技术栈
 
-本项目是一个纯前端静态应用，无需后端数据库支持。
+本项目是一个纯前端静态应用。
 
 - **核心**: HTML5, CSS3, JavaScript (ES6+)
 - **图标**: Font Awesome
@@ -65,14 +65,6 @@
      ```
    - 方式三：直接在浏览器中打开 `index.html` (部分功能如图片裁剪可能会受浏览器安全策略限制，建议使用本地服务器)。
 
-## 📂 部署
-
-本项目可以直接部署到任何静态网站托管服务，如 Netlify, Vercel,或是 GitHub Pages。
-
-**Netlify 部署步骤:**
-1. 将项目文件夹拖入 Netlify Drop 区域。
-2. 或者连接你的 GitHub 仓库，能够实现自动持续部署。
-3. 无需 Build 命令，发布目录设为根目录 `/` 即可。
 
 ## 📝 待办事项 / 开发计划
 
@@ -82,5 +74,3 @@
 
 欢迎提交 Issue 或 Pull Request 来改进这个项目！
 
----
-Designed with ❤️ for Mechanical Engineering Students.
