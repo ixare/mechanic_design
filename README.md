@@ -55,7 +55,7 @@
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/ixare/mech-design-quiz.git
+   git clone https://github.com/ixare/mechanic_design.git
    ```
 
 2. **运行 (推荐搭载 Local Server)**
