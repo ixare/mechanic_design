@@ -335,8 +335,8 @@ input:checked + .slider:before { transform: translateX(18px); }
     transform: translateY(0);
 }
 
-#test-chapter-wrong-btn { background-color: var(--primary); color: white; }
-#clear-chapter-wrong-answers-btn { background-color: var(--surface-100); color: var(--error); border: 1px solid var(--error); }
+#test-chapter-wrong-btn, #test-all-wrong-btn { background-color: var(--primary); color: white; }
+#clear-chapter-wrong-answers-btn, #clear-all-wrong-answers-btn { background-color: var(--surface-100); color: var(--error); border: 1px solid var(--error); }
 #toggle-favorites-btn { background-color: var(--surface-100); color: var(--secondary); border: 1px solid var(--secondary); }
 #toggle-all-answers-btn { background-color: var(--surface-300); color: var(--text-main); }
 

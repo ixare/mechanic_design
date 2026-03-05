@@ -15,6 +15,7 @@
         };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,7 +38,7 @@
     <span></span>
 </div>
 
-<div id="notepad-toggle" onclick="toggleRightSidebar()">
+<div id="notepad-toggle">
     <i class="fa-solid fa-pen-to-square"></i>
 </div>
 
@@ -53,18 +54,18 @@
     </div>
     <div class="sidebar-section">
         <h4>随机测试</h4>
-        <button class="sidebar-button" onclick="startMockExam()"><i class="fa-solid fa-clock"></i> 模拟考试 (20分钟)</button>
-        <button class="sidebar-button" onclick="startOverallTest('mcq')"><i class="fa-solid fa-list-check"></i> 选择题随机测试</button>
-        <button class="sidebar-button" onclick="startOverallTest('tf')"><i class="fa-solid fa-check"></i> 判断题随机测试</button>
-        <button class="sidebar-button wrong" onclick="startAllWrongAnswersTest()"><i class="fa-solid fa-circle-xmark"></i> 所有错题随机测试</button>
+        <button class="sidebar-button" data-action="startMockExam"><i class="fa-solid fa-clock"></i> 模拟考试 (20分钟)</button>
+        <button class="sidebar-button" data-action="startOverallTestMcq"><i class="fa-solid fa-list-check"></i> 选择题随机测试</button>
+        <button class="sidebar-button" data-action="startOverallTestTf"><i class="fa-solid fa-check"></i> 判断题随机测试</button>
     </div>
     <div class="sidebar-section">
         <h4>数据记录</h4>
-        <button class="sidebar-button" onclick="showDashboard()"><i class="fa-solid fa-chart-simple"></i> 学习统计</button>
-        <button class="sidebar-button fav" onclick="showAllFavorites()"><i class="fa-solid fa-star"></i> 我的收藏</button>
-        <button class="sidebar-button" onclick="showDataSync()"><i class="fa-solid fa-database"></i> 数据管理</button>
-        <button class="sidebar-button" onclick="triggerWallpaperUpload()" style="margin-top: 5px;"><i class="fa-solid fa-image"></i> 设置壁纸</button>
-        <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;" onchange="handleWallpaperUpload(this)">
+        <button class="sidebar-button" data-action="showDashboard"><i class="fa-solid fa-chart-simple"></i> 学习统计</button>
+        <button class="sidebar-button fav" data-action="showAllFavorites"><i class="fa-solid fa-star"></i> 我的收藏</button>
+        <button class="sidebar-button wrong" data-action="showAllWrongAnswers"><i class="fa-solid fa-book-journal-whills"></i> 错题汇总</button>
+        <button class="sidebar-button" data-action="showDataSync"><i class="fa-solid fa-database"></i> 数据管理</button>
+        <button class="sidebar-button" data-action="triggerWallpaperUpload" style="margin-top: 5px;"><i class="fa-solid fa-image"></i> 设置壁纸</button>
+        <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;">
     </div>
     <div class="sidebar-section">
         <h4>章节列表</h4>
@@ -78,14 +79,17 @@
         
         <div class="search-container" style="max-width: 600px; margin: 0 auto 20px; position: relative;">
             <i class="fa-solid fa-search" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-            <input type="text" id="global-search" placeholder="搜索题目关键词 (如: 齿轮, 螺栓)..." oninput="filterQuestions(this.value)" style="width: 100%; padding: 12px 12px 12px 45px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-100); color: var(--text-main); font-size: 1rem; outline: none; box-shadow: var(--shadow-sm); transition: all 0.2s;">
+            <input type="text" id="global-search" placeholder="搜索题目关键词 (如: 齿轮, 螺栓)..." style="width: 100%; padding: 12px 12px 12px 45px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-100); color: var(--text-main); font-size: 1rem; outline: none; box-shadow: var(--shadow-sm); transition: all 0.2s;">
         </div>
 
         <div id="global-controls">
-             <button id="test-chapter-wrong-btn" onclick="startCurrentChapterWrongAnswersTest()">本章错题随机测试</button>
-             <button id="clear-chapter-wrong-answers-btn" onclick="clearCurrentChapterWrongAnswers()">清空本章错题</button>
-             <button id="toggle-favorites-btn" onclick="toggleFavoritesView()">只显示收藏</button>
-             <button id="toggle-all-answers-btn" onclick="toggleAllAnswers()">显示全部答案</button>
+             <button id="test-all-wrong-btn" style="display:none;"><i class="fa-solid fa-flask"></i> 所有错题随机测试</button>
+             <button id="clear-all-wrong-answers-btn" style="display:none;"><i class="fa-solid fa-trash-can"></i> 清空所有错题</button>
+             
+             <button id="test-chapter-wrong-btn">本章错题随机测试</button>
+             <button id="clear-chapter-wrong-answers-btn">清空本章错题</button>
+             <button id="toggle-favorites-btn">只显示收藏</button>
+             <button id="toggle-all-answers-btn">显示全部答案</button>
         </div>
         <div id="content-area"></div>
         <div id="welcome-message" style="text-align: center; padding: 40px 0;">
@@ -97,7 +101,7 @@
 
 <div id="quiz-modal">
     <div id="quiz-container">
-        <span id="close-quiz" onclick="closeQuiz()">&times;</span>
+        <span id="close-quiz" data-action="closeQuiz">&times;</span>
         <div id="quiz-timer" style="position: absolute; top: 20px; right: 60px; font-weight: bold; color: var(--primary); display: none;"></div>
         <h2 id="quiz-title">随机测试</h2>
         <div id="quiz-content" style="display: none;">
@@ -112,8 +116,8 @@
             </div>
             <div id="quiz-feedback"></div>
             <div style="text-align:center; margin-top:20px;">
-                <button id="submit-answer-btn" class="quiz-button" onclick="submitQuizAnswer()">提交答案</button>
-                <button id="next-question-btn" class="quiz-button" onclick="nextQuizQuestion()" style="display:none;">下一题</button>
+                <button id="submit-answer-btn" class="quiz-button">提交答案</button>
+                <button id="next-question-btn" class="quiz-button" style="display:none;">下一题</button>
             </div>
         </div>
         <div id="quiz-score" style="display:none;"></div>
@@ -123,13 +127,13 @@
 <div id="right-sidebar">
     <h3 class="sidebar-title"><i class="fa-solid fa-pen-to-square"></i> 随手记</h3>
     <div class="notepad-container">
-        <textarea id="notepad" placeholder="在这里记录公式、重点、笔记...&#10;(内容会自动保存)" oninput="saveNotepad()"></textarea>
+        <textarea id="notepad" placeholder="在这里记录公式、重点、笔记...&#10;(内容会自动保存)"></textarea>
     </div>
     <div style="display: flex; justify-content: space-between; margin-top: 10px;">
-        <button class="text-button" onclick="downloadNotepadTxt()" style="font-size: 0.85rem; color: var(--text-muted);">
+        <button class="text-button" id="btn-download-notepad" style="font-size: 0.85rem; color: var(--text-muted);">
             <i class="fa-solid fa-download"></i> 导出TXT
         </button>
-        <button class="text-button" onclick="clearNotepad()" style="font-size: 0.85rem; color: var(--text-muted);">
+        <button class="text-button" id="btn-clear-notepad" style="font-size: 0.85rem; color: var(--text-muted);">
             <i class="fa-solid fa-trash"></i> 清空
         </button>
     </div>
@@ -137,7 +141,7 @@
 
 <div id="dashboard-modal" class="modal">
     <div class="modal-content">
-        <span class="close-modal" onclick="closeDashboard()">&times;</span>
+        <span class="close-modal" id="close-dashboard">&times;</span>
         <h2><i class="fa-solid fa-chart-pie"></i> 学习进度统计</h2>
         <div id="stats-summary" style="display:flex; justify-content:space-around; margin-bottom:20px; text-align:center;">
              <div><h3 id="stat-total">0</h3><small>刷题总数</small></div>
@@ -164,13 +168,13 @@
 
 <div id="cropper-modal" class="modal">
     <div class="modal-content" style="max-width: 800px; width: 95%; height: 80vh; display: flex; flex-direction: column; padding: 1.5rem;">
-        <span class="close-modal" onclick="closeCropper()">&times;</span>
+        <span class="close-modal" id="close-cropper">&times;</span>
         <h2 style="margin-bottom: 1rem;">裁剪壁纸</h2>
         <div style="flex: 1; min-height: 0; background: #e2e8f0; position: relative; border-radius: var(--radius-md); overflow: hidden;">
             <img id="cropper-image" style="max-width: 100%; display: block;">
         </div>
         <div style="text-align: center; margin-top: 1.5rem;">
-            <button class="quiz-button" onclick="confirmCrop()" style="width: auto; padding: 0.8rem 2rem; font-size: 1rem;">
+            <button class="quiz-button" id="btn-confirm-crop" style="width: auto; padding: 0.8rem 2rem; font-size: 1rem;">
                 <i class="fa-solid fa-check"></i> 确认并应用
             </button>
         </div>
@@ -179,18 +183,18 @@
 
 <div id="data-modal" class="modal">
     <div class="modal-content">
-        <span class="close-modal" onclick="closeDataSync()">&times;</span>
+        <span class="close-modal" id="close-data-sync">&times;</span>
         <h2><i class="fa-solid fa-database"></i> 数据管理</h2>
         <p>导出：复制下方代码保存。导入：粘贴代码并点击恢复。</p>
         <textarea id="data-area" style="width:100%; height:150px; margin:10px 0; padding:10px; border-radius:5px; border:1px solid var(--border); font-family:monospace;"></textarea>
         <div style="text-align:right;">
-            <button class="action-button" onclick="exportData()"><i class="fa-solid fa-copy"></i> 生成导出码</button>
-            <button class="action-button" style="background-color:var(--primary); color:white;" onclick="importData()"><i class="fa-solid fa-file-import"></i> 恢复数据</button>
+            <button class="action-button" id="btn-export-data"><i class="fa-solid fa-copy"></i> 生成导出码</button>
+            <button class="action-button" id="btn-import-data" style="background-color:var(--primary); color:white;"><i class="fa-solid fa-file-import"></i> 恢复数据</button>
         </div>
     </div>
 </div>
 
 <script src="questions.js"></script>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
