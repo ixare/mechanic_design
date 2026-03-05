@@ -13,16 +13,16 @@
 - **章节练习**: 按章节分类浏览题目，支持选择题和判断题。
 - **模拟考试**: 随机抽取 30 道选择题和 20 道判断题，限时 20 分钟模拟真实考试环境。
 - **综合测试**: 针对所有章节的选择题或判断题进行随机抽查。
-- **错题重练**: 自动记录你的错题，支持针对特定章节或所有错题进行强化训练。
+- **错题重练**: 自动记录错题，支持针对特定章节或在**全局错题面板**进行集中强化训练与清空管理。
 
 ### 2. 增强的学习体验
 - **即时反馈**: 提交答案后立即显示正误，并提供详细的**Markdown 解析**。
 - **公式支持**: 内置 MathJax 引擎，完美渲染题目和解析中的数学公式。
 - **键盘快捷键**:
-    - `A/B/C/D` 或 `1/2/3/4`: 选择选项
-    - `T/F`: 判断题选择 (True/False)
-    - `Enter`: 提交/下一题
-    - `Space`: 跳过当前题/下一题
+  - `A/B/C/D` 或 `1/2/3/4`: 选择题选中
+  - `T/F` 或 `1/2` 或 `A/B`: 判断题 (对/错) 选中
+  - `Enter`: 提交/进入下一题
+  - `Space`: 在空白处跳过当前题/进入下一题
 - **收藏夹**: 遇到重点难点题目，一键收藏，随时回顾。
 
 ### 3. 数据与个性化
@@ -41,11 +41,12 @@
 
 本项目是一个纯前端静态应用，无需后端数据库支持。
 
-- **核心**: HTML5, CSS3, JavaScript (ES6+)
+- **核心**: HTML5, CSS3, ES6+ Module (拆分架构: state.js / storage.js / ui.js / quiz.js)
 - **图标**: Font Awesome
 - **字体**: Google Fonts (Inter, Noto Sans SC)
 - **数学渲染**: MathJax
 - **Markdown 渲染**: Marked.js
+- **安全过滤**: DOMPurify
 - **图片裁剪**: Cropper.js
 
 ## 🚀 本地运行
@@ -54,10 +55,11 @@
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/your-username/mech-design-quiz.git
+   git clone https://github.com/ixare/mechanic_design.git
    ```
 
-2. **运行**
+2. **运行 (推荐搭载 Local Server)**
+   > **⚠️ 注意**：由于项目底层已重构为 ES6 Modules 构建规范（`<script type="module">`），为了避免出现浏览器的 CORS（跨域）预检拦截协议栈策略，**本应用必须在 HTTP 协议下运行**，而不能直接双击用本地 `file://` 协议代开文件。
    - 方式一：使用 VS Code 的 **Live Server** 插件右键 `index.html` 打开。
    - 方式二：使用 Python 快速启动：
      ```bash
@@ -83,4 +85,3 @@
 欢迎提交 Issue 或 Pull Request 来改进这个项目！
 
 ---
-Designed with ❤️ for Mechanical Engineering Students.

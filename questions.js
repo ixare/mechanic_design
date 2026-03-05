@@ -1826,3 +1826,6 @@ const tf_data = [
     { chapter: "第十四章 滚动轴承", question: "22、滚动轴承所受轴向载荷应为其内部派生轴向力与轴向外载荷的合力。", answer: "×", explanation: "计算中采用的轴向力，是在外部轴向力和内部派生轴向力之间根据一定规则<b>选取</b>的，不是简单的合力。" },
     { chapter: "第十四章 滚动轴承", question: "23、同一代号的滚动轴承其基本额定动载荷相同。", answer: "✓", explanation: "代号相同，尺寸材料相同，C值相同。" },
 ];
+
+window.mcq_data = mcq_data;
+window.tf_data = tf_data;
