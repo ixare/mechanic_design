@@ -1,6 +1,5 @@
 # 机械设计基础自测题库
 
-[![Netlify Status](https://api.netlify.com/api/v1/badges/b2c04d35-aa6e-002721b7d1bf/deploy-status)](https://app.netlify.com/sites/mechanicdesign/deploys)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 一个现代化的、响应式的机械设计基础课程自测刷题 Web 应用。专为浙江大学  **机械设计基础** 课程期末复习设计，提供题库和多种练习模式。
@@ -55,7 +54,7 @@
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/ixare/mech-design-quiz.git
+   git clone https://github.com/ixare/mechanic_design.git
    ```
 
 2. **运行 (推荐搭载 Local Server)**
