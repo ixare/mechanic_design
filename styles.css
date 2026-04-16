@@ -525,6 +525,10 @@ body.dark-mode #quiz-feedback.correct { color: #d1fae5; }
     color: #991b1b;
     border: 1px solid var(--error);
 }
+
+#quiz-feedback .explanation-span {
+    display: block;
+}
 body.dark-mode #quiz-feedback.incorrect { color: #fee2e2; }
 
 #submit-answer-btn { background-color: var(--primary); color: white; width: 100%; justify-content: center; margin-top: 1rem; font-size: 1rem; padding: 0.8rem;}
