@@ -1,6 +1,60 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
-import { saveFavorites, saveWrongAnswers, WALLPAPER_KEY } from './storage.js';
+import {
+    getWrongAnswerEntries,
+    getWrongAnswerQids,
+    removeWrongAnswerRecord,
+    saveFavorites,
+    saveWrongAnswers,
+    WALLPAPER_KEY
+} from './storage.js';
+
+function getChapterOrder(chapterName) {
+    const match = chapterName.match(/第(\S+)章/);
+    if (!match) return Number.MAX_SAFE_INTEGER;
+    const raw = match[1];
+    const numberMap = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+    if (/^\d+$/.test(raw)) return Number(raw);
+    if (raw === '十') return 10;
+    if (raw.startsWith('十')) return 10 + (numberMap[raw.slice(1)] || 0);
+    if (raw.includes('十')) {
+        const [ten, one] = raw.split('十');
+        return (numberMap[ten] || 1) * 10 + (numberMap[one] || 0);
+    }
+    return numberMap[raw] || Number.MAX_SAFE_INTEGER;
+}
+
+function getSearchTerms(query) {
+    return query.trim().split(/\s+/).filter(Boolean);
+}
+
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function formatInlineHtml(text, terms = []) {
+    let html = String(text || '').replace(/(\(|\（)\s*(\)|\）)/, ' (   ) ');
+    terms.forEach(term => {
+        if (!term) return;
+        html = html.replace(new RegExp(`(${escapeRegExp(term)})`, 'gi'), '<mark class="search-highlight">$1</mark>');
+    });
+    if (typeof DOMPurify !== 'undefined') {
+        html = DOMPurify.sanitize(html, {
+            ADD_TAGS: ['mark'],
+            ADD_ATTR: ['class']
+        });
+    }
+    return html;
+}
+
+function getWrongStatusLabel(status) {
+    const labels = {
+        unmastered: '未掌握',
+        reviewing: '巩固中',
+        mastered: '已掌握'
+    };
+    return labels[status] || '未掌握';
+}
 
 export function setupMobileMenu() {
     const menuToggle = document.getElementById('menu-toggle');
@@ -36,11 +90,38 @@ export function setupMobileMenu() {
     });
 }
 
+export function setupSearchFilters() {
+    const searchInput = document.getElementById('global-search');
+    const searchContainer = searchInput ? searchInput.closest('.search-container') : null;
+    if (!searchContainer || document.getElementById('search-filter-bar')) return;
+
+    const filterBar = document.createElement('div');
+    filterBar.id = 'search-filter-bar';
+    filterBar.className = 'search-filter-bar';
+    filterBar.innerHTML = `
+        <select id="search-type-filter" aria-label="题型筛选">
+            <option value="all">全部题型</option>
+            <option value="mcq">只看选择题</option>
+            <option value="tf">只看判断题</option>
+        </select>
+        <select id="search-scope-filter" aria-label="范围筛选">
+            <option value="all">全部题目</option>
+            <option value="favorites">只搜收藏</option>
+            <option value="wrong">只搜错题</option>
+        </select>
+    `;
+    searchContainer.appendChild(filterBar);
+
+    filterBar.addEventListener('change', () => {
+        filterQuestions(searchInput.value);
+    });
+}
+
 export function updateChapterNavStatus() {
     document.querySelectorAll('#chapter-nav-list details').forEach(detail => {
         const chapterName = detail.dataset.chapterName;
         const wrongBtn = detail.querySelector('.chapter-wrong-button');
-        const wrongCount = (state.wrongAnswersByChapter[chapterName] || []).length;
+        const wrongCount = getWrongAnswerQids(chapterName).length;
         if (wrongCount > 0) {
             wrongBtn.textContent = `本章错题 (${wrongCount})`;
             wrongBtn.disabled = false;
@@ -67,8 +148,12 @@ export function updateGlobalControls(show, options = {}) {
     if (options.showAllWrongClear) document.getElementById('clear-all-wrong-answers-btn').style.display = 'inline-block';
     if (options.showAllWrongTest) document.getElementById('test-all-wrong-btn').style.display = 'inline-block';
     
-    document.getElementById('toggle-all-answers-btn').textContent = '显示全部答案';
-    document.getElementById('toggle-favorites-btn').textContent = '只显示收藏';
+    const answerBtn = document.getElementById('toggle-all-answers-btn');
+    const favoriteBtn = document.getElementById('toggle-favorites-btn');
+    answerBtn.textContent = '显示全部答案';
+    answerBtn.dataset.state = 'hidden';
+    favoriteBtn.textContent = '只显示收藏';
+    favoriteBtn.dataset.state = 'all';
 }
 
 export function createNavigationAndContent() {
@@ -77,11 +162,7 @@ export function createNavigationAndContent() {
     chapterNavList.innerHTML = '';
     contentArea.innerHTML = '';
 
-    Object.keys(state.all_data).sort((a, b) => {
-        const numA = parseInt(a.match(/第(\S+)章/)[1].replace(/[\u4e00-\u9fa5]/g, match => ' 一二三四五六七八九十'.indexOf(match)));
-        const numB = parseInt(b.match(/第(\S+)章/)[1].replace(/[\u4e00-\u9fa5]/g, match => ' 一二三四五六七八九十'.indexOf(match)));
-        return numA - numB;
-    }).forEach(chapterName => {
+    Object.keys(state.all_data).sort((a, b) => getChapterOrder(a) - getChapterOrder(b)).forEach(chapterName => {
         const details = document.createElement('details');
         details.dataset.chapterName = chapterName;
         
@@ -128,20 +209,55 @@ export function createNavigationAndContent() {
     updateChapterNavStatus();
 }
 
-export function renderQuestions(questionsList) {
+export function renderQuestions(questionsList, options = {}) {
     const contentArea = document.getElementById('content-area');
     contentArea.innerHTML = '';
+    state.currentQuestionList = questionsList;
+    state.currentRenderOptions = { ...options };
+    state.currentPage = options.page || 1;
+
+    const totalPages = Math.max(1, Math.ceil(questionsList.length / state.questionPageSize));
+    if (state.currentPage > totalPages) state.currentPage = totalPages;
+
+    const start = (state.currentPage - 1) * state.questionPageSize;
+    const pageQuestions = questionsList.slice(start, start + state.questionPageSize);
     let visibleBlocks = [];
-    questionsList.forEach(item => {
-        const block = createQuestionBlock(item);
+    pageQuestions.forEach(item => {
+        const block = createQuestionBlock(item, options);
         block.classList.add('visible');
         contentArea.appendChild(block);
         visibleBlocks.push(block);
     });
+    renderPagination(contentArea, questionsList.length, totalPages, options);
     return visibleBlocks;
 }
 
-export function createQuestionBlock(item) {
+function renderPagination(contentArea, total, totalPages, options) {
+    if (total <= state.questionPageSize) return;
+
+    const pagination = document.createElement('div');
+    pagination.className = 'pagination-controls';
+    pagination.innerHTML = `
+        <button class="action-button" data-action="changePage" data-page="${state.currentPage - 1}" ${state.currentPage === 1 ? 'disabled' : ''}>上一页</button>
+        <span>第 ${state.currentPage} / ${totalPages} 页，共 ${total} 题</span>
+        <button class="action-button" data-action="changePage" data-page="${state.currentPage + 1}" ${state.currentPage === totalPages ? 'disabled' : ''}>下一页</button>
+    `;
+    pagination.dataset.renderMode = options.mode || 'list';
+    contentArea.appendChild(pagination);
+}
+
+export function changePage(page) {
+    const nextPage = Number(page);
+    if (!Number.isFinite(nextPage) || nextPage < 1) return;
+    const visibleBlocks = renderQuestions(state.currentQuestionList, { ...state.currentRenderOptions, page: nextPage });
+    visibleBlocks.forEach(block => {
+        const removeBtn = block.querySelector('.remove-wrong-answer-btn');
+        if (removeBtn) removeBtn.style.display = state.currentRenderOptions.mode === 'wrong' ? 'inline-block' : 'none';
+    });
+    typesetMath(visibleBlocks);
+}
+
+export function createQuestionBlock(item, options = {}) {
     const block = document.createElement('div');
     block.className = 'question-block';
     block.dataset.qid = item.qid;
@@ -158,11 +274,22 @@ export function createQuestionBlock(item) {
     }
 
     const isFav = state.favorites.includes(item.qid);
+    const wrongRecord = (state.wrongAnswersByChapter[item.chapter] || {})[item.qid];
+    const searchTerms = options.searchTerms || [];
+    const questionHtml = formatInlineHtml(item.question, searchTerms);
+    const wrongMetaHtml = wrongRecord ? `
+        <div class="wrong-meta">
+            <span>${getWrongStatusLabel(wrongRecord.status)}</span>
+            <span>错 ${wrongRecord.wrongCount || 1} 次</span>
+            <span>连续答对 ${wrongRecord.correctStreak || 0} 次</span>
+        </div>
+    ` : '';
     block.innerHTML = `
-        <p>${item.question.replace(/(\(|\（)\s*(\)|\）)/, ' (   ) ')}</p>
-        ${item.type === 'mcq' ? `<ul>${item.options.map(o => `<li>${o}</li>`).join('')}</ul>` : ''}
+        <p>${questionHtml}</p>
+        ${wrongMetaHtml}
+        ${item.type === 'mcq' ? `<ul>${item.options.map(o => `<li>${formatInlineHtml(o, searchTerms)}</li>`).join('')}</ul>` : ''}
         <div class="action-buttons-container">
-            <button class="action-button" data-action="toggleAnswer"><i class="fa-regular fa-eye"></i> 显示答案</button>
+            <button class="action-button" data-action="toggleAnswer" data-state="hidden"><i class="fa-regular fa-eye"></i> 显示答案</button>
             <span class="answer-span">答案: ${item.answer}</span>
             <div class="explanation-span">${explanationHtml ? `<b>解析：</b>${explanationHtml}` : ''}</div>
             <button class="action-button favorite-button ${isFav ? 'favorited' : ''}" data-qid="${item.qid}" data-action="toggleFavorite">${isFav ? '<i class="fa-solid fa-star"></i> 已收藏' : '<i class="fa-regular fa-star"></i> 收藏'}</button>
@@ -211,9 +338,9 @@ export function showChapterWrongAnswers(chapterName, btn) {
 
     document.getElementById('main-title').textContent = `${chapterName} - 错题回顾`;
 
-    const chapterWrongQids = state.wrongAnswersByChapter[chapterName] || [];
+    const chapterWrongQids = getWrongAnswerQids(chapterName);
     const questionsList = chapterWrongQids.map(qid => state.question_lookup[qid]).filter(Boolean);
-    const visibleBlocks = renderQuestions(questionsList);
+    const visibleBlocks = renderQuestions(questionsList, { mode: 'wrong' });
     
     visibleBlocks.forEach(block => {
         const removeBtn = block.querySelector('.remove-wrong-answer-btn');
@@ -221,7 +348,7 @@ export function showChapterWrongAnswers(chapterName, btn) {
     });
     typesetMath(visibleBlocks);
 
-    if (chapterWrongQids.length === 0) {
+    if (questionsList.length === 0) {
         updateGlobalControls(false);
         document.getElementById('content-area').innerHTML = '';
         document.getElementById('welcome-message').style.display = 'block';
@@ -242,9 +369,9 @@ export function showAllWrongAnswers() {
         state.activeChapterButton = null;
     }
 
-    const allWrongQids = Object.values(state.wrongAnswersByChapter).flat();
+    const allWrongQids = getWrongAnswerQids();
     const questionsList = allWrongQids.map(qid => state.question_lookup[qid]).filter(Boolean);
-    const visibleBlocks = renderQuestions(questionsList);
+    const visibleBlocks = renderQuestions(questionsList, { mode: 'wrong' });
     
     visibleBlocks.forEach(block => {
         const removeBtn = block.querySelector('.remove-wrong-answer-btn');
@@ -292,6 +419,9 @@ export function showAllFavorites() {
 
 export function filterQuestions(query) {
     const searchTerm = query.trim().toLowerCase();
+    const terms = getSearchTerms(searchTerm);
+    const typeFilter = document.getElementById('search-type-filter')?.value || 'all';
+    const scopeFilter = document.getElementById('search-scope-filter')?.value || 'all';
     
     if (state.activeChapterButton) {
         state.activeChapterButton.classList.remove('active');
@@ -313,14 +443,21 @@ export function filterQuestions(query) {
     
     const allQuestions = [...window.mcq_data, ...window.tf_data];
     const filtered = allQuestions.filter(q => {
+        if (typeFilter !== 'all' && q.type !== typeFilter) return false;
+        if (scopeFilter === 'favorites' && !state.favorites.includes(q.qid)) return false;
+        if (scopeFilter === 'wrong' && !getWrongAnswerQids(q.chapter).includes(q.qid)) return false;
+
         const itemText = (q.question + (q.options ? q.options.join(' ') : '') + q.answer + (q.explanation || '')).toLowerCase();
-        return itemText.includes(searchTerm);
+        return terms.every(term => itemText.includes(term));
     });
 
-    const visibleBlocks = renderQuestions(filtered);
+    const visibleBlocks = renderQuestions(filtered, {
+        searchTerms: terms,
+        mode: scopeFilter === 'wrong' ? 'wrong' : 'search'
+    });
     visibleBlocks.forEach(block => {
         const removeBtn = block.querySelector('.remove-wrong-answer-btn');
-        if (removeBtn) removeBtn.style.display = 'none';
+        if (removeBtn) removeBtn.style.display = scopeFilter === 'wrong' ? 'inline-block' : 'none';
     });
 
     if (filtered.length === 0) {
@@ -340,30 +477,57 @@ export function showDashboard() {
     document.getElementById('stat-correct').textContent = `${rate}%`;
     document.getElementById('stat-correct').style.color = rate >= 60 ? 'var(--success)' : 'var(--error)';
     
-    let totalWrong = 0;
-    Object.values(state.wrongAnswersByChapter).forEach(arr => totalWrong += arr.length);
+    const totalWrong = getWrongAnswerQids().length;
     document.getElementById('stat-wrong-count').textContent = totalWrong;
 
     const tbody = document.getElementById('stats-table-body');
     tbody.innerHTML = '';
+    const dashboardContent = document.querySelector('#dashboard-modal .modal-content');
+    let insightBox = document.getElementById('dashboard-insights');
+    if (!insightBox) {
+        insightBox = document.createElement('div');
+        insightBox.id = 'dashboard-insights';
+        dashboardContent.insertBefore(insightBox, tbody.closest('div'));
+    }
     
-    Object.keys(state.all_data).sort((a, b) => {
-         const numA = parseInt(a.match(/第(\S+)章/)[1].replace(/[\u4e00-\u9fa5]/g, match => ' 一二三四五六七八九十'.indexOf(match)));
-         const numB = parseInt(b.match(/第(\S+)章/)[1].replace(/[\u4e00-\u9fa5]/g, match => ' 一二三四五六七八九十'.indexOf(match)));
-         return numA - numB;
-    }).forEach(chapter => {
+    const chapterRows = Object.keys(state.all_data).sort((a, b) => getChapterOrder(a) - getChapterOrder(b)).map(chapter => {
         const stats = state.userStats.chapterStats[chapter] || { total: 0, correct: 0 };
         const acc = stats.total === 0 ? 0 : Math.round((stats.correct / stats.total) * 100);
+        const totalQuestions = state.all_data[chapter].mcq.length + state.all_data[chapter].tf.length;
+        const practiced = Math.min(stats.total, totalQuestions);
+        const completion = totalQuestions === 0 ? 0 : Math.round((practiced / totalQuestions) * 100);
+        const wrongCount = getWrongAnswerQids(chapter).length;
+        return { chapter, stats, acc, totalQuestions, practiced, completion, wrongCount };
+    });
+
+    const weakChapters = chapterRows
+        .filter(row => row.stats.total > 0)
+        .sort((a, b) => (a.acc - b.acc) || (b.wrongCount - a.wrongCount))
+        .slice(0, 3);
+
+    insightBox.innerHTML = weakChapters.length ? `
+        <div class="dashboard-insight-card">
+            <strong>优先复习</strong>
+            <span>${weakChapters.map(row => `${row.chapter} (${row.acc}%)`).join('、')}</span>
+        </div>
+    ` : `
+        <div class="dashboard-insight-card">
+            <strong>优先复习</strong>
+            <span>先完成一次章节或综合测试，系统会自动识别薄弱章节。</span>
+        </div>
+    `;
+
+    chapterRows.forEach(row => {
         
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${chapter}</td>
+            <td>${row.chapter}<br><span style="font-size:0.8em;color:var(--text-light);">完成 ${row.practiced}/${row.totalQuestions}，错题 ${row.wrongCount}</span></td>
             <td>
                 <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" style="width: ${acc}%"></div>
+                    <div class="progress-bar-fill" style="width: ${row.completion}%"></div>
                 </div>
             </td>
-            <td style="text-align:right;">${acc}% <span style="font-size:0.8em;color:var(--text-light);">(${stats.correct}/${stats.total})</span></td>
+            <td style="text-align:right;">${row.acc}% <span style="font-size:0.8em;color:var(--text-light);">(${row.stats.correct}/${row.stats.total})</span></td>
         `;
         tbody.appendChild(tr);
     });
@@ -501,7 +665,7 @@ export function clearAllWrongAnswers() {
 export function clearCurrentChapterWrongAnswers() {
     if (!state.activeChapter) return;
     if (confirm(`确定要清空【${state.activeChapter}】的所有错题记录吗？`)) {
-        state.wrongAnswersByChapter[state.activeChapter] = [];
+        state.wrongAnswersByChapter[state.activeChapter] = {};
         saveWrongAnswers();
         showChapterWrongAnswers(state.activeChapter);
         updateChapterNavStatus();
@@ -510,14 +674,8 @@ export function clearCurrentChapterWrongAnswers() {
 
 export function removeSingleWrongAnswer(qid, chapter, btn) {
     if (confirm('确定将此题从错题本移除？')) {
-        let arr = state.wrongAnswersByChapter[chapter];
-        if (arr) {
-            const index = arr.indexOf(qid);
-            if (index > -1) {
-                arr.splice(index, 1);
-                saveWrongAnswers();
-            }
-        }
+        removeWrongAnswerRecord(chapter, qid);
+        saveWrongAnswers();
         
         const block = btn.closest('.question-block');
         if (block) block.remove();
@@ -525,11 +683,11 @@ export function removeSingleWrongAnswer(qid, chapter, btn) {
         updateChapterNavStatus();
 
         if (state.activeChapter === null && document.getElementById('main-title').textContent === '全局错题汇总') {
-            const allWrongQids = Object.values(state.wrongAnswersByChapter).flat();
+            const allWrongQids = getWrongAnswerQids();
             if (allWrongQids.length === 0) {
                 showAllWrongAnswers();
             }
-        } else if (state.wrongAnswersByChapter[chapter] && state.wrongAnswersByChapter[chapter].length === 0) {
+        } else if (getWrongAnswerQids(chapter).length === 0) {
             showChapterWrongAnswers(chapter);
         }
     }
@@ -559,7 +717,7 @@ export function toggleFavorite(qid, btn) {
 
 export function toggleAllAnswers() {
     const btn = document.getElementById('toggle-all-answers-btn');
-    const showing = btn.textContent === '隐藏全部答案';
+    const showing = btn.dataset.state === 'shown';
     
     document.querySelectorAll('.question-block.visible').forEach(block => {
         const answerSpan = block.querySelector('.answer-span');
@@ -577,11 +735,12 @@ export function toggleAllAnswers() {
     });
 
     btn.textContent = showing ? '显示全部答案' : '隐藏全部答案';
+    btn.dataset.state = showing ? 'hidden' : 'shown';
 }
 
 export function toggleFavoritesView() {
     const btn = document.getElementById('toggle-favorites-btn');
-    const showingOnlyFavorites = btn.textContent === '显示全部题目';
+    const showingOnlyFavorites = btn.dataset.state === 'favorites';
     
     document.querySelectorAll('.question-block.visible').forEach(block => {
         const qid = block.dataset.qid;
@@ -597,4 +756,5 @@ export function toggleFavoritesView() {
     });
 
     btn.textContent = showingOnlyFavorites ? '只显示收藏' : '显示全部题目';
+    btn.dataset.state = showingOnlyFavorites ? 'all' : 'favorites';
 }

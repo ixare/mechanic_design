@@ -187,8 +187,11 @@
         <h2><i class="fa-solid fa-database"></i> 数据管理</h2>
         <p>导出：复制下方代码保存。导入：粘贴代码并点击恢复。</p>
         <textarea id="data-area" style="width:100%; height:150px; margin:10px 0; padding:10px; border-radius:5px; border:1px solid var(--border); font-family:monospace;"></textarea>
+        <input type="file" id="data-file-input" accept="application/json,.json" style="display:none;">
         <div style="text-align:right;">
             <button class="action-button" id="btn-export-data"><i class="fa-solid fa-copy"></i> 生成导出码</button>
+            <button class="action-button" id="btn-copy-export-data"><i class="fa-solid fa-clipboard"></i> 复制导出码</button>
+            <button class="action-button" data-action="triggerDataFileImport"><i class="fa-solid fa-file-arrow-up"></i> 导入备份文件</button>
             <button class="action-button" id="btn-import-data" style="background-color:var(--primary); color:white;"><i class="fa-solid fa-file-import"></i> 恢复数据</button>
         </div>
     </div>

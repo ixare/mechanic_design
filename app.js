@@ -1,21 +1,22 @@
 import { state, processData } from './js/state.js';
 import { 
     loadWrongAnswers, loadFavorites, loadStats, loadNotepad, 
-    saveNotepad, exportData, importData, changeTheme
+    saveNotepad, exportData, copyExportData, importData, importDataFile, changeTheme
 } from './js/storage.js';
 import { 
     setupMobileMenu, createNavigationAndContent, toggleRightSidebar, 
+    setupSearchFilters,
     showDashboard, closeDashboard, showDataSync, closeDataSync, 
     downloadNotepadTxt, initWallpaper, triggerWallpaperUpload, 
     handleWallpaperUpload, confirmCrop, closeCropper,
     removeSingleWrongAnswer, toggleFavorite, toggleAllAnswers, toggleFavoritesView, clearCurrentChapterWrongAnswers,
     showQuestions, showChapterWrongAnswers, showAllFavorites, filterQuestions,
-    showAllWrongAnswers, clearAllWrongAnswers
+    showAllWrongAnswers, clearAllWrongAnswers, changePage
 } from './js/ui.js';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
     startCurrentChapterWrongAnswersTest, startChapterTest,
-    submitQuizAnswer, nextQuizQuestion, closeQuiz
+    startLastWrongQuizTest, submitQuizAnswer, nextQuizQuestion, closeQuiz
 } from './js/quiz.js';
 import { typesetMath } from './js/utils.js';
 
@@ -30,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 架设 UI
     setupMobileMenu();
+    setupSearchFilters();
     createNavigationAndContent();
     initWallpaper();
 
@@ -57,22 +59,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'startOverallTestMcq': startOverallTest('mcq'); break;
                 case 'startOverallTestTf': startOverallTest('tf'); break;
                 case 'startAllWrongAnswersTest': startAllWrongAnswersTest(); break;
+                case 'startLastWrongQuizTest': startLastWrongQuizTest(); break;
                 case 'showDashboard': showDashboard(); break;
                 case 'showAllFavorites': showAllFavorites(); break;
                 case 'showAllWrongAnswers': showAllWrongAnswers(); break;
                 case 'showDataSync': showDataSync(); break;
                 case 'triggerWallpaperUpload': triggerWallpaperUpload(); break;
+                case 'triggerDataFileImport': document.getElementById('data-file-input')?.click(); break;
                 
                 case 'showChapterWrongAnswers': showChapterWrongAnswers(chapter, actionBtn); break;
                 case 'showQuestions': showQuestions(chapter, actionBtn.dataset.type, actionBtn); break;
                 case 'startChapterTest': startChapterTest(chapter); break;
+                case 'changePage': changePage(actionBtn.dataset.page); break;
                 
                 case 'toggleAnswer': 
                     const answerSpan = actionBtn.nextElementSibling;
                     const explanationSpan = answerSpan.nextElementSibling;
-                    answerSpan.style.display = 'inline';
-                    explanationSpan.style.display = 'block';
-                    typesetMath([explanationSpan]);
+                    const isShowing = actionBtn.dataset.state === 'shown';
+                    answerSpan.style.display = isShowing ? 'none' : 'inline';
+                    explanationSpan.style.display = isShowing ? 'none' : 'block';
+                    actionBtn.dataset.state = isShowing ? 'hidden' : 'shown';
+                    actionBtn.innerHTML = isShowing ? '<i class="fa-regular fa-eye"></i> 显示答案' : '<i class="fa-regular fa-eye-slash"></i> 隐藏答案';
+                    if (!isShowing) typesetMath([explanationSpan]);
                     break;
                 case 'toggleFavorite': toggleFavorite(qid, actionBtn); break;
                 case 'removeWrongAnswer': removeSingleWrongAnswer(qid, chapter, actionBtn); break;
@@ -107,7 +115,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('close-data-sync').addEventListener('click', closeDataSync);
     
     document.getElementById('btn-export-data').addEventListener('click', exportData);
+    document.getElementById('btn-copy-export-data')?.addEventListener('click', copyExportData);
     document.getElementById('btn-import-data').addEventListener('click', importData);
+    document.getElementById('data-file-input')?.addEventListener('change', function() {
+        importDataFile(this.files[0]);
+        this.value = '';
+    });
     document.getElementById('submit-answer-btn').addEventListener('click', () => submitQuizAnswer(false));
     document.getElementById('next-question-btn').addEventListener('click', nextQuizQuestion);
 
@@ -133,6 +146,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 监听键盘事件，支援快速答题引擎 (使用捕获阶段防止 Vim 等插件拦截)
 window.addEventListener('keydown', function(event) {
+    const target = event.target;
+    if (target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) {
+        return;
+    }
+
     const quizModal = document.getElementById('quiz-modal');
     const isModalVisible = quizModal && quizModal.style.display === 'block' && window.getComputedStyle(quizModal).display !== 'none';
     

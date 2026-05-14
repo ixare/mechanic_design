@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
-import { updateStats, saveWrongAnswers } from './storage.js';
+import { getWrongAnswerQids, recordCorrectPractice, recordWrongAnswer, updateStats } from './storage.js';
 import { updateChapterNavStatus } from './ui.js';
 
 export function startChapterTest(chapterName) {
@@ -17,22 +17,29 @@ export function startOverallTest(type) {
 }
 
 export function startAllWrongAnswersTest() {
-    const allWrongQids = Object.values(state.wrongAnswersByChapter).flat();
+    const allWrongQids = getWrongAnswerQids();
     if (allWrongQids.length === 0) {
         alert('您的错题本是空的，无法开始测试！'); return;
     }
-    const questionPool = allWrongQids.map(qid => state.question_lookup[qid]);
+    const questionPool = allWrongQids.map(qid => state.question_lookup[qid]).filter(Boolean);
     startQuiz(questionPool, 0, '所有错题随机测试');
 }
 
 export function startCurrentChapterWrongAnswersTest() {
     if (!state.activeChapter) return;
-    const chapterWrongQids = state.wrongAnswersByChapter[state.activeChapter] || [];
+    const chapterWrongQids = getWrongAnswerQids(state.activeChapter);
     if (chapterWrongQids.length === 0) {
         alert('本章没有错题，无法开始测试！'); return;
     }
-    const questionPool = chapterWrongQids.map(qid => state.question_lookup[qid]);
+    const questionPool = chapterWrongQids.map(qid => state.question_lookup[qid]).filter(Boolean);
     startQuiz(questionPool, 0, `【${state.activeChapter}】错题测试`);
+}
+
+export function startLastWrongQuizTest() {
+    if (!state.lastWrongQuizQuestions.length) {
+        alert('本次测试没有错题可重练！'); return;
+    }
+    startQuiz(state.lastWrongQuizQuestions, 0, '本次错题重练');
 }
 
 export function startMockExam() {
@@ -42,7 +49,7 @@ export function startMockExam() {
     
     startQuiz(questions, 50, '模拟考试 (20分钟)');
     
-    state.quizState = 'EXAM';
+    state.quizMode = 'exam';
     document.getElementById('quiz-timer').style.display = 'block';
     
     state.examTimeRemaining = 20 * 60; 
@@ -54,8 +61,8 @@ export function startMockExam() {
         updateTimerDisplay();
         if (state.examTimeRemaining <= 0) {
             clearInterval(state.examTimerInterval);
+            state.examTimerInterval = null;
             alert('考试时间到！即将提交试卷。');
-            closeQuiz(); 
             showQuizResults(); 
         }
     }, 1000);
@@ -64,6 +71,10 @@ export function startMockExam() {
 export function startQuiz(questionPool, numQuestions, title) {
     state.score = 0;
     state.currentQuestionIndex = 0;
+    state.quizAnswers = [];
+    state.lastWrongQuizQuestions = [];
+    state.quizMode = 'practice';
+    state.quizFinalized = false;
     state.quizQuestions = [...questionPool].sort(() => 0.5 - Math.random());
     if (numQuestions > 0 && numQuestions < state.quizQuestions.length) {
         state.quizQuestions = state.quizQuestions.slice(0, numQuestions);
@@ -76,6 +87,7 @@ export function startQuiz(questionPool, numQuestions, title) {
     document.getElementById('quiz-score').style.display = 'none';
     document.getElementById('quiz-content').style.display = 'block';
     document.getElementById('quiz-modal').style.display = 'block';
+    document.getElementById('quiz-timer').style.display = 'none';
 
     displayQuizQuestion();
 }
@@ -96,6 +108,7 @@ export function closeQuiz() {
     document.getElementById('quiz-modal').style.display = 'none';
     document.getElementById('quiz-timer').style.display = 'none';
     if (state.examTimerInterval) clearInterval(state.examTimerInterval);
+    state.examTimerInterval = null;
     state.quizState = 'IDLE';
 }
 
@@ -151,6 +164,7 @@ export function displayQuizQuestion() {
         typesetMath([questionContainer]);
         
         state.quizState = 'ANSWERING';
+        state.quizFinalized = false;
 
     } else {
         showQuizResults();
@@ -158,6 +172,7 @@ export function displayQuizQuestion() {
 }
 
 export function submitQuizAnswer(skipped = false) {
+    if (state.quizFinalized) return;
     let userAnswer = null;
     if (!skipped) {
         const selectedOption = document.querySelector('input[name="quizOption"]:checked');
@@ -167,20 +182,25 @@ export function submitQuizAnswer(skipped = false) {
     
     const question = state.quizQuestions[state.currentQuestionIndex];
     const isCorrect = !skipped && (userAnswer === question.answer);
+    const answerRecord = {
+        qid: question.qid,
+        userAnswer: skipped ? '跳过' : userAnswer,
+        correctAnswer: question.answer,
+        isCorrect,
+        skipped,
+        chapter: question.chapter,
+        type: question.type
+    };
+    state.quizAnswers[state.currentQuestionIndex] = answerRecord;
     
     updateStats(question, isCorrect);
 
     if (isCorrect) {
         state.score++;
+        recordCorrectPractice(question);
     } else {
-        if (!state.wrongAnswersByChapter[question.chapter]) {
-            state.wrongAnswersByChapter[question.chapter] = [];
-        }
-        if (!state.wrongAnswersByChapter[question.chapter].includes(question.qid)) {
-            state.wrongAnswersByChapter[question.chapter].push(question.qid);
-            saveWrongAnswers();
-            updateChapterNavStatus();
-        }
+        recordWrongAnswer(question, document.getElementById('quiz-title').textContent || 'quiz');
+        updateChapterNavStatus();
     }
 
     const feedbackEl = document.getElementById('quiz-feedback');
@@ -212,14 +232,69 @@ export function nextQuizQuestion() {
 }
 
 export function showQuizResults() {
+    if (state.quizFinalized) return;
+    state.quizFinalized = true;
+    if (state.examTimerInterval) {
+        clearInterval(state.examTimerInterval);
+        state.examTimerInterval = null;
+    }
+    document.getElementById('quiz-timer').style.display = 'none';
     document.getElementById('quiz-content').style.display = 'none';
     const scoreEl = document.getElementById('quiz-score');
     scoreEl.style.display = 'block';
+    state.lastWrongQuizQuestions = state.quizQuestions
+        .map((question, index) => {
+            const answer = state.quizAnswers[index];
+            return !answer || !answer.isCorrect ? question : null;
+        })
+        .filter(Boolean);
+
+    const reviewItems = state.quizQuestions.map((question, index) => {
+        const answer = state.quizAnswers[index] || {
+            userAnswer: '未作答',
+            correctAnswer: question.answer,
+            isCorrect: false,
+            skipped: true
+        };
+        let explanationText = question.explanation || '暂无解析';
+        if (typeof marked !== 'undefined' && marked.parse) {
+            explanationText = marked.parse(explanationText);
+        }
+        if (typeof DOMPurify !== 'undefined') {
+            explanationText = DOMPurify.sanitize(explanationText);
+        }
+        return `
+            <details class="quiz-review-item ${answer.isCorrect ? 'is-correct' : 'is-wrong'}">
+                <summary>
+                    <span>第 ${index + 1} 题</span>
+                    <strong>${answer.isCorrect ? '正确' : (answer.skipped ? '跳过' : '错误')}</strong>
+                </summary>
+                <p>${question.question.replace(/(\(|\（)\s*(\)|\）)/, ' (   ) ')}</p>
+                ${question.type === 'mcq' ? `<ul>${question.options.map(option => `<li>${option}</li>`).join('')}</ul>` : ''}
+                <div class="quiz-review-answer">
+                    <span>你的答案：${answer.userAnswer}</span>
+                    <span>正确答案：${question.answer}</span>
+                </div>
+                <div class="explanation-span"><b>解析：</b>${explanationText}</div>
+            </details>
+        `;
+    }).join('');
+
+    const wrongRetryButton = state.lastWrongQuizQuestions.length > 0
+        ? '<button class="quiz-button" data-action="startLastWrongQuizTest"><i class="fa-solid fa-rotate-right"></i> 重练本次错题</button>'
+        : '';
+
     scoreEl.innerHTML = `
         <h3>测试结束！</h3>
         <p>你的得分: <span style="color:var(--primary-color);font-size:1.5em;">${state.score}</span> / ${state.quizLength}</p>
         <p>正确率: ${Math.round((state.score / state.quizLength) * 100)}%</p>
-        <button class="quiz-button" data-action="closeQuiz" style="background-color:var(--secondary-color);">关闭</button>
+        <p>本次错题: ${state.lastWrongQuizQuestions.length} 道</p>
+        <div class="quiz-result-actions">
+            ${wrongRetryButton}
+            <button class="quiz-button" data-action="closeQuiz" style="background-color:var(--secondary-color);">关闭</button>
+        </div>
+        <div class="quiz-review-list">${reviewItems}</div>
     `;
+    typesetMath([scoreEl]);
     state.quizState = 'IDLE';
 }
