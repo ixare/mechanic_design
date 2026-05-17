@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'showAllFavorites': showAllFavorites(); break;
                 case 'showAllWrongAnswers': showAllWrongAnswers(); break;
                 case 'showDataSync': showDataSync(); break;
+                case 'showFeedback': showFeedbackModal(); break;
                 case 'triggerWallpaperUpload': triggerWallpaperUpload(); break;
                 case 'triggerDataFileImport': document.getElementById('data-file-input')?.click(); break;
                 
@@ -204,3 +205,42 @@ window.addEventListener('keydown', function(event) {
         }
     }
 }, true); // 注意：此处 useCapture = true，在捕获阶段优先拦截事件
+
+// 反馈模块
+function showFeedbackModal() {
+    document.getElementById('feedback-modal').style.display = 'block';
+}
+
+function closeFeedbackModal() {
+    document.getElementById('feedback-modal').style.display = 'none';
+    document.getElementById('feedback-content').value = '';
+}
+
+function buildFeedbackText() {
+    const type = document.getElementById('feedback-type').value;
+    const content = document.getElementById('feedback-content').value.trim();
+    const typeLabels = { bug: 'Bug / 题目错误', feature: '功能建议', other: '其他' };
+    return `【${typeLabels[type]}】\n${content}`;
+}
+
+document.getElementById('close-feedback').addEventListener('click', closeFeedbackModal);
+
+document.getElementById('btn-feedback-github').addEventListener('click', () => {
+    const type = document.getElementById('feedback-type').value;
+    const content = document.getElementById('feedback-content').value.trim();
+    if (!content) { alert('请填写反馈内容'); return; }
+    const labels = { bug: 'bug', feature: 'enhancement', other: '' };
+    const title = encodeURIComponent(content.slice(0, 60));
+    const body = encodeURIComponent(buildFeedbackText());
+    const label = labels[type] ? `&labels=${labels[type]}` : '';
+    window.open(`https://github.com/reche916/--s/issues/new?title=${title}&body=${body}${label}`, '_blank');
+    closeFeedbackModal();
+});
+
+document.getElementById('btn-feedback-copy').addEventListener('click', () => {
+    const content = document.getElementById('feedback-content').value.trim();
+    if (!content) { alert('请填写反馈内容'); return; }
+    navigator.clipboard.writeText(buildFeedbackText()).then(() => {
+        alert('反馈内容已复制到剪贴板');
+    });
+});

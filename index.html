@@ -66,6 +66,7 @@
         <button class="sidebar-button" data-action="showDataSync"><i class="fa-solid fa-database"></i> 数据管理</button>
         <button class="sidebar-button" data-action="triggerWallpaperUpload" style="margin-top: 5px;"><i class="fa-solid fa-image"></i> 设置壁纸</button>
         <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;">
+        <button class="sidebar-button" data-action="showFeedback" style="margin-top: 5px;"><i class="fa-solid fa-comment-dots"></i> 意见反馈</button>
     </div>
     <div class="sidebar-section">
         <h4>章节列表</h4>
@@ -194,6 +195,37 @@
             <button class="action-button" data-action="triggerDataFileImport"><i class="fa-solid fa-file-arrow-up"></i> 导入备份文件</button>
             <button class="action-button" id="btn-import-data" style="background-color:var(--primary); color:white;"><i class="fa-solid fa-file-import"></i> 恢复数据</button>
         </div>
+    </div>
+</div>
+
+<div id="feedback-modal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <span class="close-modal" id="close-feedback">&times;</span>
+        <h2><i class="fa-solid fa-comment-dots"></i> 意见反馈</h2>
+        <p style="color: var(--text-muted); margin-bottom: 15px;">遇到问题或有改进建议？选择一种方式告诉我：</p>
+        <div style="margin-bottom: 15px;">
+            <label style="font-weight: 500; display: block; margin-bottom: 5px;">反馈类型</label>
+            <select id="feedback-type" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface-100); color: var(--text-main);">
+                <option value="bug">Bug / 题目错误</option>
+                <option value="feature">功能建议</option>
+                <option value="other">其他</option>
+            </select>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="font-weight: 500; display: block; margin-bottom: 5px;">详细描述</label>
+            <textarea id="feedback-content" rows="5" placeholder="请描述你遇到的问题或建议..." style="width: 100%; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface-100); color: var(--text-main); resize: vertical;"></textarea>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="action-button" id="btn-feedback-github" style="background-color: var(--primary); color: white; flex: 1;">
+                <i class="fa-brands fa-github"></i> 提交到 GitHub
+            </button>
+            <button class="action-button" id="btn-feedback-copy" style="flex: 1;">
+                <i class="fa-solid fa-copy"></i> 复制反馈内容
+            </button>
+        </div>
+        <p style="margin-top: 12px; font-size: 0.8rem; color: var(--text-light); text-align: center;">
+            也可以直接发邮件到: <a href="mailto:reche916@gmail.com" style="color: var(--primary);">reche916@gmail.com</a>
+        </p>
     </div>
 </div>
 
