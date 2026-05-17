@@ -233,7 +233,7 @@ document.getElementById('btn-feedback-github').addEventListener('click', () => {
     const title = encodeURIComponent(content.slice(0, 60));
     const body = encodeURIComponent(buildFeedbackText());
     const label = labels[type] ? `&labels=${labels[type]}` : '';
-    window.open(`https://github.com/reche916/--s/issues/new?title=${title}&body=${body}${label}`, '_blank');
+    window.open(`https://github.com/ixare/mechanic_design/issues/new?title=${title}&body=${body}${label}`, '_blank');
     closeFeedbackModal();
 });
 
