@@ -603,6 +603,11 @@ body.dark-mode #quiz-feedback.incorrect { color: #fee2e2; }
     body.sidebar-open #menu-toggle {
         display: none;
     }
+
+    .random-source-options,
+    .random-test-chapters {
+        grid-template-columns: 1fr;
+    }
 }
 
 @keyframes slideUp {
@@ -793,6 +798,89 @@ body.dark-mode #quiz-feedback.incorrect { color: #fee2e2; }
     cursor: pointer;
 }
 .close-modal:hover { color: var(--text-main); }
+
+.random-test-panel {
+    max-width: 720px;
+}
+
+.random-test-section {
+    margin: 1.25rem 0;
+}
+
+.random-test-section-title {
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 0.6rem;
+}
+
+.random-source-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.random-source-options label,
+.random-test-chapter-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-200);
+    padding: 0.75rem 0.9rem;
+    cursor: pointer;
+}
+
+.random-source-options input,
+.random-test-chapter-option input {
+    accent-color: var(--primary);
+}
+
+.random-test-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.random-test-chapters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    max-height: 320px;
+    overflow: auto;
+    padding-right: 0.25rem;
+}
+
+.random-test-chapter-option span {
+    flex: 1;
+    min-width: 0;
+}
+
+.random-test-chapter-option small {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.random-test-summary {
+    color: var(--text-muted);
+    background: var(--surface-300);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 0.9rem;
+    font-size: 0.9rem;
+}
+
+.random-test-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1.25rem;
+}
+
+#start-random-test-confirm {
+    width: auto;
+    background: var(--primary);
+    color: white;
+}
 
 #stats-table th { color: var(--text-muted); font-size: 0.9rem; }
 #stats-table td { padding: 12px 10px; border-bottom: 1px solid var(--border); font-size: 0.95rem; }

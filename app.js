@@ -16,7 +16,8 @@ import {
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
     startCurrentChapterWrongAnswersTest, startChapterTest,
-    startLastWrongQuizTest, submitQuizAnswer, nextQuizQuestion, closeQuiz
+    startLastWrongQuizTest, submitQuizAnswer, nextQuizQuestion, closeQuiz,
+    openRandomTestSetup
 } from './js/quiz.js';
 import { typesetMath } from './js/utils.js';
 
@@ -55,9 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const chapter = actionBtn.dataset.chapter;
 
             switch(action) {
-                case 'startMockExam': startMockExam(); break;
-                case 'startOverallTestMcq': startOverallTest('mcq'); break;
-                case 'startOverallTestTf': startOverallTest('tf'); break;
+                case 'startMockExam': openRandomTestSetup('exam'); break;
+                case 'startOverallTestMcq': openRandomTestSetup('mcq'); break;
+                case 'startOverallTestTf': openRandomTestSetup('tf'); break;
                 case 'startAllWrongAnswersTest': startAllWrongAnswersTest(); break;
                 case 'startLastWrongQuizTest': startLastWrongQuizTest(); break;
                 case 'showDashboard': showDashboard(); break;
