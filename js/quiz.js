@@ -338,8 +338,8 @@ export function displayQuizQuestion() {
         const instructionsEl = document.getElementById('keyboard-instructions');
         
         instructionsEl.textContent = question.type === 'mcq' ? 
-            '提示：使用键盘 A/B/C/D 或 1/2/3/4 选择，Enter 确认，Space跳过。' : 
-            '提示：使用键盘 T/1(对) / F/2(错) 选择，Enter 确认，Space跳过。';
+            '提示：使用键盘 A/B/C/D 或 1/2/3/4 选择，Enter 提交答案、下一题，Space跳过。' : 
+            '提示：使用键盘 T/1(对) / F/2(错) 选择，Enter 提交答案、下一题，Space跳过。';
 
         document.getElementById('quiz-question-text').innerHTML = question.question.replace(/(\(|\（)\s*(\)|\）)/, ' (   ) ');
         const optionsContainer = document.getElementById('quiz-options');
