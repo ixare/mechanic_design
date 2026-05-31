@@ -11,7 +11,8 @@ import {
     handleWallpaperUpload, confirmCrop, closeCropper,
     removeSingleWrongAnswer, toggleFavorite, toggleAllAnswers, toggleFavoritesView, clearCurrentChapterWrongAnswers,
     showQuestions, showChapterWrongAnswers, showAllFavorites, filterQuestions,
-    showAllWrongAnswers, clearAllWrongAnswers, changePage
+    showAllWrongAnswers, clearAllWrongAnswers, changePage, scrollToQuestionTop,
+    openSearchModal, closeSearchModal
 } from './js/ui.js';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
@@ -64,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'showDashboard': showDashboard(); break;
                 case 'showAllFavorites': showAllFavorites(); break;
                 case 'showAllWrongAnswers': showAllWrongAnswers(); break;
+                case 'openSearchModal': openSearchModal(); break;
                 case 'showDataSync': showDataSync(); break;
                 case 'showFeedback': showFeedbackModal(); break;
                 case 'triggerWallpaperUpload': triggerWallpaperUpload(); break;
@@ -73,6 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'showQuestions': showQuestions(chapter, actionBtn.dataset.type, actionBtn); break;
                 case 'startChapterTest': startChapterTest(chapter); break;
                 case 'changePage': changePage(actionBtn.dataset.page); break;
+                case 'scrollToQuestionTop': scrollToQuestionTop(); break;
                 
                 case 'toggleAnswer': 
                     const answerSpan = actionBtn.nextElementSibling;
@@ -112,6 +115,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     document.getElementById('close-dashboard').addEventListener('click', closeDashboard);
+    document.getElementById('close-search-modal').addEventListener('click', closeSearchModal);
+    document.getElementById('search-modal').addEventListener('click', (event) => {
+        if (event.target.id === 'search-modal') closeSearchModal();
+    });
     document.getElementById('close-cropper').addEventListener('click', closeCropper);
     document.getElementById('btn-confirm-crop').addEventListener('click', confirmCrop);
     document.getElementById('close-data-sync').addEventListener('click', closeDataSync);

@@ -99,20 +99,64 @@ export function setupSearchFilters() {
     filterBar.id = 'search-filter-bar';
     filterBar.className = 'search-filter-bar';
     filterBar.innerHTML = `
-        <select id="search-type-filter" aria-label="题型筛选">
-            <option value="all">全部题型</option>
-            <option value="mcq">只看选择题</option>
-            <option value="tf">只看判断题</option>
-        </select>
-        <select id="search-scope-filter" aria-label="范围筛选">
-            <option value="all">全部题目</option>
-            <option value="favorites">只搜收藏</option>
-            <option value="wrong">只搜错题</option>
-        </select>
+        <div class="search-select-row">
+            <select id="search-type-filter" aria-label="题型筛选">
+                <option value="all">全部题型</option>
+                <option value="mcq">只看选择题</option>
+                <option value="tf">只看判断题</option>
+            </select>
+            <select id="search-scope-filter" aria-label="范围筛选">
+                <option value="all">全部题目</option>
+                <option value="favorites">只搜收藏</option>
+                <option value="wrong">只搜错题</option>
+            </select>
+        </div>
+        <div class="search-chapter-filter">
+            <div class="search-chapter-filter-title">
+                <span>章节范围</span>
+                <span>
+                    <button type="button" class="text-button" id="search-chapter-select-all">全选</button>
+                    <button type="button" class="text-button" id="search-chapter-clear-all">清空</button>
+                </span>
+            </div>
+            <div id="search-chapter-options" class="search-chapter-options"></div>
+        </div>
     `;
     searchContainer.appendChild(filterBar);
 
+    const chapterOptions = filterBar.querySelector('#search-chapter-options');
+    Object.keys(state.all_data)
+        .sort((a, b) => getChapterOrder(a) - getChapterOrder(b))
+        .forEach(chapterName => {
+            const label = document.createElement('label');
+            label.className = 'search-chapter-option';
+            const checkbox = Object.assign(document.createElement('input'), {
+                type: 'checkbox',
+                name: 'search-chapter',
+                value: chapterName,
+                checked: true
+            });
+            const text = document.createElement('span');
+            text.textContent = chapterName;
+            label.append(checkbox, text);
+            chapterOptions.appendChild(label);
+        });
+
     filterBar.addEventListener('change', () => {
+        filterQuestions(searchInput.value);
+    });
+    document.getElementById('search-modal')?.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' || event.isComposing) return;
+        event.preventDefault();
+        filterQuestions(searchInput.value);
+        closeSearchModal();
+    });
+    filterBar.querySelector('#search-chapter-select-all').addEventListener('click', () => {
+        filterBar.querySelectorAll('input[name="search-chapter"]').forEach(input => { input.checked = true; });
+        filterQuestions(searchInput.value);
+    });
+    filterBar.querySelector('#search-chapter-clear-all').addEventListener('click', () => {
+        filterBar.querySelectorAll('input[name="search-chapter"]').forEach(input => { input.checked = false; });
         filterQuestions(searchInput.value);
     });
 }
@@ -222,28 +266,40 @@ export function renderQuestions(questionsList, options = {}) {
     const start = (state.currentPage - 1) * state.questionPageSize;
     const pageQuestions = questionsList.slice(start, start + state.questionPageSize);
     let visibleBlocks = [];
+    renderPagination(contentArea, questionsList.length, totalPages, options);
     pageQuestions.forEach(item => {
         const block = createQuestionBlock(item, options);
         block.classList.add('visible');
         contentArea.appendChild(block);
         visibleBlocks.push(block);
     });
-    renderPagination(contentArea, questionsList.length, totalPages, options);
     return visibleBlocks;
 }
 
 function renderPagination(contentArea, total, totalPages, options) {
-    if (total <= state.questionPageSize) return;
-
     const pagination = document.createElement('div');
     pagination.className = 'pagination-controls';
     pagination.innerHTML = `
-        <button class="action-button" data-action="changePage" data-page="${state.currentPage - 1}" ${state.currentPage === 1 ? 'disabled' : ''}>上一页</button>
-        <span>第 ${state.currentPage} / ${totalPages} 页，共 ${total} 题</span>
-        <button class="action-button" data-action="changePage" data-page="${state.currentPage + 1}" ${state.currentPage === totalPages ? 'disabled' : ''}>下一页</button>
+        <button class="action-button pagination-button" data-action="changePage" data-page="${state.currentPage - 1}" ${state.currentPage === 1 ? 'disabled' : ''}>
+            <i class="fa-solid fa-chevron-left"></i> 上一页
+        </button>
+        <span class="pagination-status">第 ${state.currentPage} / ${totalPages} 页，共 ${total} 题</span>
+        <button class="action-button pagination-button" data-action="changePage" data-page="${state.currentPage + 1}" ${state.currentPage === totalPages ? 'disabled' : ''}>
+            下一页 <i class="fa-solid fa-chevron-right"></i>
+        </button>
+        <button class="action-button pagination-top-button" data-action="scrollToQuestionTop" title="回到题目顶部" aria-label="回到题目顶部">
+            <i class="fa-solid fa-arrow-up"></i> 回顶
+        </button>
     `;
     pagination.dataset.renderMode = options.mode || 'list';
     contentArea.appendChild(pagination);
+}
+
+export function scrollToQuestionTop() {
+    const mainTitle = document.getElementById('main-title');
+    const target = mainTitle || document.getElementById('content-area');
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 export function changePage(page) {
@@ -255,6 +311,7 @@ export function changePage(page) {
         if (removeBtn) removeBtn.style.display = state.currentRenderOptions.mode === 'wrong' ? 'inline-block' : 'none';
     });
     typesetMath(visibleBlocks);
+    document.getElementById('content-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 export function createQuestionBlock(item, options = {}) {
@@ -422,16 +479,24 @@ export function filterQuestions(query) {
     const terms = getSearchTerms(searchTerm);
     const typeFilter = document.getElementById('search-type-filter')?.value || 'all';
     const scopeFilter = document.getElementById('search-scope-filter')?.value || 'all';
+    const chapterInputs = Array.from(document.querySelectorAll('input[name="search-chapter"]'));
+    const selectedChapters = chapterInputs.filter(input => input.checked).map(input => input.value);
+    const chapterFilterActive = chapterInputs.length > 0 && selectedChapters.length !== chapterInputs.length;
+    const selectedChapterSet = new Set(selectedChapters);
+    const hasActiveSearch = searchTerm.length > 0
+        || typeFilter !== 'all'
+        || scopeFilter !== 'all'
+        || chapterFilterActive;
     
     if (state.activeChapterButton) {
         state.activeChapterButton.classList.remove('active');
         state.activeChapterButton = null;
     }
     
-    if (searchTerm.length === 0) {
+    if (!hasActiveSearch) {
         document.getElementById('content-area').innerHTML = '';
         document.getElementById('welcome-message').style.display = 'block';
-        document.getElementById('welcome-message').innerHTML = '<p>请从左侧选择一个章节和题型开始练习。</p><p>或者输入关键词搜索题目。</p>';
+        document.getElementById('welcome-message').innerHTML = '<p>请从左侧选择一个章节和题型开始练习。</p><p>也可以使用左侧全局搜索筛选题目。</p>';
         updateGlobalControls(false);
         document.getElementById('main-title').textContent = '欢迎使用机械设计基础自测题库';
         return;
@@ -439,13 +504,14 @@ export function filterQuestions(query) {
 
     document.getElementById('welcome-message').style.display = 'none';
     updateGlobalControls(true, { showFavoriteFilter: true });
-    document.getElementById('main-title').textContent = `搜索结果: "${query}"`;
+    document.getElementById('main-title').textContent = searchTerm.length > 0 ? `搜索结果: "${query}"` : '筛选结果';
     
     const allQuestions = [...window.mcq_data, ...window.tf_data];
     const filtered = allQuestions.filter(q => {
         if (typeFilter !== 'all' && q.type !== typeFilter) return false;
         if (scopeFilter === 'favorites' && !state.favorites.includes(q.qid)) return false;
         if (scopeFilter === 'wrong' && !getWrongAnswerQids(q.chapter).includes(q.qid)) return false;
+        if (chapterFilterActive && !selectedChapterSet.has(q.chapter)) return false;
 
         const itemText = (q.question + (q.options ? q.options.join(' ') : '') + q.answer + (q.explanation || '')).toLowerCase();
         return terms.every(term => itemText.includes(term));
@@ -464,10 +530,25 @@ export function filterQuestions(query) {
         updateGlobalControls(false);
         document.getElementById('content-area').innerHTML = '';
         document.getElementById('welcome-message').style.display = 'block';
-        document.getElementById('welcome-message').innerHTML = `<p>未找到包含 "${query}" 的题目。</p>`;
+        document.getElementById('welcome-message').innerHTML = searchTerm.length > 0
+            ? `<p>未找到包含 "${query}" 的题目。</p>`
+            : '<p>未找到符合当前筛选条件的题目。</p>';
     } else {
          typesetMath(visibleBlocks);
     }
+}
+
+export function openSearchModal() {
+    const modal = document.getElementById('search-modal');
+    const input = document.getElementById('global-search');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    setTimeout(() => input?.focus(), 0);
+}
+
+export function closeSearchModal() {
+    const modal = document.getElementById('search-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 export function showDashboard() {

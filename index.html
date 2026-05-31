@@ -52,6 +52,12 @@
             <span class="slider"></span>
         </label>
     </div>
+    <div class="sidebar-section search-sidebar-section">
+        <h4>全局搜索</h4>
+        <button class="sidebar-button search-launch-button" data-action="openSearchModal">
+            <i class="fa-solid fa-magnifying-glass"></i> 打开搜索面板
+        </button>
+    </div>
     <div class="sidebar-section">
         <h4>随机测试</h4>
         <button class="sidebar-button" data-action="startMockExam"><i class="fa-solid fa-clock"></i> 模拟考试 (20分钟)</button>
@@ -74,14 +80,9 @@
     </div>
 </div>
 
-<div id="main-content">
+    <div id="main-content">
     <div class="main-container">
         <h1 id="main-title">欢迎使用机械设计基础自测题库</h1>
-        
-        <div class="search-container" style="max-width: 600px; margin: 0 auto 20px; position: relative;">
-            <i class="fa-solid fa-search" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-            <input type="text" id="global-search" placeholder="搜索题目关键词 (如: 齿轮, 螺栓)..." style="width: 100%; padding: 12px 12px 12px 45px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-100); color: var(--text-main); font-size: 1rem; outline: none; box-shadow: var(--shadow-sm); transition: all 0.2s;">
-        </div>
 
         <div id="global-controls">
              <button id="test-all-wrong-btn" style="display:none;"><i class="fa-solid fa-flask"></i> 所有错题随机测试</button>
@@ -97,6 +98,18 @@
             <p>请从左侧选择一个章节和题型开始练习。</p>
             <p>您也可以进行综合测试或查看您的收藏。</p>
         </div>
+    </div>
+</div>
+
+<div id="search-modal" class="modal">
+    <div class="modal-content search-modal-panel">
+        <span class="close-modal" id="close-search-modal">&times;</span>
+        <h2><i class="fa-solid fa-magnifying-glass"></i> 全局搜索</h2>
+        <div class="search-container search-modal-search">
+            <i class="fa-solid fa-search"></i>
+            <input type="text" id="global-search" placeholder="搜索题目关键词 (如: 齿轮, 螺栓)...">
+        </div>
+        <p class="search-modal-hint"><i class="fa-solid fa-keyboard"></i> 按 Enter 应用搜索并关闭窗口</p>
     </div>
 </div>
 
