@@ -3,6 +3,218 @@ import { typesetMath } from './utils.js';
 import { getWrongAnswerQids, recordCorrectPractice, recordWrongAnswer, updateStats } from './storage.js';
 import { updateChapterNavStatus } from './ui.js';
 
+const randomTestState = {
+    mode: 'exam',
+    source: 'all',
+    selectedChapters: []
+};
+
+function getAllChapters() {
+    return Object.keys(state.all_data);
+}
+
+function getSelectedChapters() {
+    return randomTestState.selectedChapters.filter(chapter => state.all_data[chapter]);
+}
+
+function matchesRandomSource(question, wrongQids) {
+    if (randomTestState.source === 'favorites') {
+        return state.favorites.includes(question.qid);
+    }
+    if (randomTestState.source === 'wrong') {
+        return wrongQids.has(question.qid);
+    }
+    return true;
+}
+
+function buildQuestionPool(type = null) {
+    const selectedChapters = new Set(getSelectedChapters());
+    const wrongQids = new Set(getWrongAnswerQids());
+    const questions = [];
+
+    selectedChapters.forEach(chapterName => {
+        const chapter = state.all_data[chapterName];
+        if (!chapter) return;
+        const chapterQuestions = type
+            ? chapter[type]
+            : [...chapter.mcq, ...chapter.tf];
+        questions.push(...chapterQuestions.filter(question => matchesRandomSource(question, wrongQids)));
+    });
+
+    return questions;
+}
+
+function getChapterQuestionCount(chapterName) {
+    const chapter = state.all_data[chapterName];
+    if (!chapter) return 0;
+    const chapterQuestions = randomTestState.mode === 'exam'
+        ? [...chapter.mcq, ...chapter.tf]
+        : chapter[randomTestState.mode];
+    const wrongQids = new Set(getWrongAnswerQids());
+    return chapterQuestions.filter(question => matchesRandomSource(question, wrongQids)).length;
+}
+
+function shuffleQuestions(questions) {
+    return [...questions].sort(() => 0.5 - Math.random());
+}
+
+function getRandomSourceLabel() {
+    const labels = {
+        all: '全部题目',
+        wrong: '错题',
+        favorites: '收藏'
+    };
+    return labels[randomTestState.source] || labels.all;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    return escapeHtml(text).replace(/"/g, '&quot;');
+}
+
+function ensureRandomTestModal() {
+    let modal = document.getElementById('random-test-modal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'random-test-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content random-test-panel">
+            <span class="close-modal" id="close-random-test-modal">&times;</span>
+            <h2 id="random-test-title"><i class="fa-solid fa-sliders"></i> 随机测试设置</h2>
+            <div class="random-test-section">
+                <div class="random-test-section-title">抽题来源</div>
+                <div class="random-source-options">
+                    <label><input type="radio" name="random-test-source" value="all" checked> 全部题目</label>
+                    <label><input type="radio" name="random-test-source" value="wrong"> 只抽错题</label>
+                    <label><input type="radio" name="random-test-source" value="favorites"> 只抽收藏</label>
+                </div>
+            </div>
+            <div class="random-test-section">
+                <div class="random-test-toolbar">
+                    <div class="random-test-section-title">选择章节</div>
+                    <div>
+                        <button type="button" class="text-button" id="random-test-select-all">全选</button>
+                        <button type="button" class="text-button" id="random-test-clear-all">清空</button>
+                    </div>
+                </div>
+                <div id="random-test-chapters" class="random-test-chapters"></div>
+            </div>
+            <div id="random-test-summary" class="random-test-summary"></div>
+            <div class="random-test-actions">
+                <button class="quiz-button" id="start-random-test-confirm"><i class="fa-solid fa-play"></i> 开始测试</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.addEventListener('change', event => {
+        if (event.target.name === 'random-test-source') {
+            randomTestState.source = event.target.value;
+            renderRandomTestChapters();
+            updateRandomTestSummary();
+        }
+        if (event.target.name === 'random-test-chapter') {
+            randomTestState.selectedChapters = Array.from(modal.querySelectorAll('input[name="random-test-chapter"]:checked')).map(input => input.value);
+            updateRandomTestSummary();
+        }
+    });
+    modal.querySelector('#close-random-test-modal').addEventListener('click', closeRandomTestSetup);
+    modal.querySelector('#random-test-select-all').addEventListener('click', () => {
+        randomTestState.selectedChapters = getAllChapters();
+        renderRandomTestChapters();
+        updateRandomTestSummary();
+    });
+    modal.querySelector('#random-test-clear-all').addEventListener('click', () => {
+        randomTestState.selectedChapters = [];
+        renderRandomTestChapters();
+        updateRandomTestSummary();
+    });
+    modal.querySelector('#start-random-test-confirm').addEventListener('click', startConfiguredRandomTest);
+    modal.addEventListener('click', event => {
+        if (event.target === modal) closeRandomTestSetup();
+    });
+
+    return modal;
+}
+
+function renderRandomTestChapters() {
+    const container = document.getElementById('random-test-chapters');
+    const selected = new Set(randomTestState.selectedChapters);
+    container.innerHTML = getAllChapters().map(chapter => {
+        const count = getChapterQuestionCount(chapter);
+        return `
+            <label class="random-test-chapter-option">
+                <input type="checkbox" name="random-test-chapter" value="${escapeAttr(chapter)}" ${selected.has(chapter) ? 'checked' : ''}>
+                <span>${escapeHtml(chapter)}</span>
+                <small>${count} 题</small>
+            </label>
+        `;
+    }).join('');
+}
+
+function updateRandomTestSummary() {
+    const summary = document.getElementById('random-test-summary');
+    const selectedCount = getSelectedChapters().length;
+    const sourceLabel = getRandomSourceLabel();
+    const mcqCount = buildQuestionPool('mcq').length;
+    const tfCount = buildQuestionPool('tf').length;
+    const total = randomTestState.mode === 'exam' ? mcqCount + tfCount : buildQuestionPool(randomTestState.mode).length;
+    const modeLabel = randomTestState.mode === 'exam'
+        ? `模拟考试：可抽 ${mcqCount} 道选择题、${tfCount} 道判断题`
+        : `${randomTestState.mode === 'mcq' ? '选择题' : '判断题'}随机测试：可抽 ${total} 道`;
+    summary.textContent = `已选 ${selectedCount} 个章节，来源：${sourceLabel}，${modeLabel}`;
+}
+
+export function openRandomTestSetup(mode) {
+    const modal = ensureRandomTestModal();
+    randomTestState.mode = mode;
+    randomTestState.source = 'all';
+    randomTestState.selectedChapters = getAllChapters();
+
+    const titleMap = {
+        exam: '模拟考试设置',
+        mcq: '选择题随机测试设置',
+        tf: '判断题随机测试设置'
+    };
+    document.getElementById('random-test-title').innerHTML = `<i class="fa-solid fa-sliders"></i> ${titleMap[mode] || '随机测试设置'}`;
+    modal.querySelector('input[name="random-test-source"][value="all"]').checked = true;
+    renderRandomTestChapters();
+    updateRandomTestSummary();
+    modal.style.display = 'block';
+}
+
+function closeRandomTestSetup() {
+    const modal = document.getElementById('random-test-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function startConfiguredRandomTest() {
+    if (getSelectedChapters().length === 0) {
+        alert('请至少选择一个章节！');
+        return;
+    }
+    closeRandomTestSetup();
+    if (randomTestState.mode === 'exam') {
+        startMockExam({
+            mcqPool: buildQuestionPool('mcq'),
+            tfPool: buildQuestionPool('tf'),
+            titleSuffix: `｜${getRandomSourceLabel()}｜${getSelectedChapters().length}章`
+        });
+        return;
+    }
+    startOverallTest(randomTestState.mode, {
+        questionPool: buildQuestionPool(randomTestState.mode),
+        titleSuffix: `｜${getRandomSourceLabel()}｜${getSelectedChapters().length}章`
+    });
+}
+
 export function startChapterTest(chapterName) {
     const chapterData = state.all_data[chapterName];
     if (!chapterData || (chapterData.mcq.length === 0 && chapterData.tf.length === 0)) {
@@ -11,9 +223,10 @@ export function startChapterTest(chapterName) {
     startQuiz([...chapterData.mcq, ...chapterData.tf], 0, `${chapterName} - 随机测试`);
 }
 
-export function startOverallTest(type) {
-    const questionPool = type === 'mcq' ? window.mcq_data : window.tf_data;
-    startQuiz(questionPool, 20, type === 'mcq' ? '选择题综合测试' : '判断题综合测试');
+export function startOverallTest(type, options = {}) {
+    const questionPool = options.questionPool || (type === 'mcq' ? window.mcq_data : window.tf_data);
+    const title = type === 'mcq' ? '选择题随机测试' : '判断题随机测试';
+    startQuiz(questionPool, 20, `${title}${options.titleSuffix || ''}`);
 }
 
 export function startAllWrongAnswersTest() {
@@ -42,12 +255,18 @@ export function startLastWrongQuizTest() {
     startQuiz(state.lastWrongQuizQuestions, 0, '本次错题重练');
 }
 
-export function startMockExam() {
-    const mcqs = [...window.mcq_data].sort(() => 0.5 - Math.random()).slice(0, 30);
-    const tfs = [...window.tf_data].sort(() => 0.5 - Math.random()).slice(0, 20);
-    const questions = [...mcqs, ...tfs].sort(() => 0.5 - Math.random());
+export function startMockExam(options = {}) {
+    const mcqPool = options.mcqPool || window.mcq_data;
+    const tfPool = options.tfPool || window.tf_data;
+    const mcqs = shuffleQuestions(mcqPool).slice(0, 30);
+    const tfs = shuffleQuestions(tfPool).slice(0, 20);
+    const questions = shuffleQuestions([...mcqs, ...tfs]);
+    if (questions.length === 0) {
+        alert('没有符合当前筛选条件的题目，无法开始测试！');
+        return;
+    }
     
-    startQuiz(questions, 50, '模拟考试 (20分钟)');
+    startQuiz(questions, questions.length, `模拟考试 (20分钟)${options.titleSuffix || ''}`);
     
     state.quizMode = 'exam';
     document.getElementById('quiz-timer').style.display = 'block';
