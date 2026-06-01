@@ -498,7 +498,7 @@ export function filterQuestions(query) {
         document.getElementById('welcome-message').style.display = 'block';
         document.getElementById('welcome-message').innerHTML = '<p>请从左侧选择一个章节和题型开始练习。</p><p>也可以使用左侧全局搜索筛选题目。</p>';
         updateGlobalControls(false);
-        document.getElementById('main-title').textContent = '欢迎使用机械设计基础自测题库';
+        document.getElementById('main-title').textContent = '欢迎使用机械设计基础题库自测';
         return;
     }
 

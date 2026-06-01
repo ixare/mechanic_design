@@ -1,10 +1,10 @@
-# 机械设计基础自测题库
+# 机械设计基础题库自测
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 一个现代化的、响应式的机械设计基础课程自测刷题 Web 应用。专为浙江大学  **机械设计基础** 课程期末复习设计，提供题库和多种练习模式。
 
-👉 **在线使用**: [机械设计基础自测题库](https://mechanicdesign.netlify.app)
+👉 **在线使用**: [机械设计基础题库自测](https://mechanicdesign.netlify.app)
 
 ## ✨ 主要功能
 
