@@ -1,4 +1,4 @@
-import { state, processData } from './js/state.js';
+import { state, loadQuestionBank, processData } from './js/state.js';
 import { 
     loadWrongAnswers, loadFavorites, loadStats, loadNotepad, 
     saveNotepad, exportData, copyExportData, importData, importDataFile, changeTheme
@@ -12,7 +12,11 @@ import {
     removeSingleWrongAnswer, toggleFavorite, toggleAllAnswers, toggleFavoritesView, clearCurrentChapterWrongAnswers,
     showQuestions, showChapterWrongAnswers, showAllFavorites, filterQuestions,
     showAllWrongAnswers, clearAllWrongAnswers, changePage, scrollToQuestionTop,
-    openSearchModal, closeSearchModal
+    openSearchModal, closeSearchModal,
+    closeQuestionEditManager, closeQuestionEditModal, copyQuestionSyncRequest,
+    discardCurrentQuestionEdit, discardQuestionEditById, downloadQuestionSyncRequest,
+    handleQuestionEditSubmit, openQuestionEditModal,
+    openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary
 } from './js/ui.js';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
@@ -21,9 +25,14 @@ import {
     openRandomTestSetup
 } from './js/quiz.js';
 import { typesetMath } from './js/utils.js';
+import { loadQuestionEdits } from './js/questionEdits.js';
 
-document.addEventListener('DOMContentLoaded', () => {
-    processData();
+const QUESTION_NOTICE_KEY = 'mech_design_question_notice_2026_07_01';
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const questionBank = await loadQuestionBank();
+    processData(questionBank);
+    loadQuestionEdits();
     
     // 加载全部持久化数据
     loadWrongAnswers();
@@ -36,6 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSearchFilters();
     createNavigationAndContent();
     initWallpaper();
+    updateQuestionEditSummary();
+    showQuestionNoticeOnce();
 
     // 初始化夜间模式
     const toggleSwitch = document.getElementById('dark-mode-switch');
@@ -67,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'showAllWrongAnswers': showAllWrongAnswers(); break;
                 case 'openSearchModal': openSearchModal(); break;
                 case 'showDataSync': showDataSync(); break;
+                case 'showQuestionEditManager': showQuestionEditManager(); break;
                 case 'showFeedback': showFeedbackModal(); break;
                 case 'triggerWallpaperUpload': triggerWallpaperUpload(); break;
                 case 'triggerDataFileImport': document.getElementById('data-file-input')?.click(); break;
@@ -89,6 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'toggleFavorite': toggleFavorite(qid, actionBtn); break;
                 case 'removeWrongAnswer': removeSingleWrongAnswer(qid, chapter, actionBtn); break;
+                case 'openQuestionEditor': openQuestionEditModal(qid); break;
+                case 'discardQuestionEdit': discardQuestionEditById(qid); break;
                 
                 case 'closeQuiz': closeQuiz(); break;
             }
@@ -122,6 +136,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('close-cropper').addEventListener('click', closeCropper);
     document.getElementById('btn-confirm-crop').addEventListener('click', confirmCrop);
     document.getElementById('close-data-sync').addEventListener('click', closeDataSync);
+    document.getElementById('close-question-edit').addEventListener('click', closeQuestionEditModal);
+    document.getElementById('close-question-edit-manager').addEventListener('click', closeQuestionEditManager);
+    document.getElementById('question-edit-form').addEventListener('submit', handleQuestionEditSubmit);
+    document.getElementById('btn-discard-question-edit').addEventListener('click', discardCurrentQuestionEdit);
+    document.getElementById('btn-copy-question-sync').addEventListener('click', copyQuestionSyncRequest);
+    document.getElementById('btn-download-question-sync').addEventListener('click', downloadQuestionSyncRequest);
+    document.getElementById('btn-open-question-sync-issue').addEventListener('click', openQuestionSyncRequestIssue);
+    document.getElementById('btn-confirm-question-notice').addEventListener('click', closeQuestionNotice);
     
     document.getElementById('btn-export-data').addEventListener('click', exportData);
     document.getElementById('btn-copy-export-data')?.addEventListener('click', copyExportData);
@@ -152,6 +174,16 @@ document.addEventListener('DOMContentLoaded', () => {
         notepadInput.addEventListener('input', saveNotepad);
     }
 });
+
+function showQuestionNoticeOnce() {
+    if (localStorage.getItem(QUESTION_NOTICE_KEY)) return;
+    document.getElementById('question-notice-modal').style.display = 'block';
+}
+
+function closeQuestionNotice() {
+    localStorage.setItem(QUESTION_NOTICE_KEY, 'dismissed');
+    document.getElementById('question-notice-modal').style.display = 'none';
+}
 
 // 监听键盘事件，支援快速答题引擎 (使用捕获阶段防止 Vim 等插件拦截)
 window.addEventListener('keydown', function(event) {

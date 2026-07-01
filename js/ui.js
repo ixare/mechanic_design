@@ -8,6 +8,16 @@ import {
     saveWrongAnswers,
     WALLPAPER_KEY
 } from './storage.js';
+import {
+    copyQuestionSyncPayload,
+    discardQuestionEdit,
+    downloadQuestionSyncPayload,
+    getQuestionEditCount,
+    getQuestionSyncPayload,
+    hasQuestionEdit,
+    openQuestionSyncIssue,
+    saveQuestionEdit
+} from './questionEdits.js';
 
 function getChapterOrder(chapterName) {
     const match = chapterName.match(/第(\S+)章/);
@@ -320,6 +330,9 @@ export function createQuestionBlock(item, options = {}) {
     block.dataset.qid = item.qid;
     block.dataset.chapter = item.chapter;
     block.dataset.type = item.type;
+    if (hasQuestionEdit(item.qid)) {
+        block.classList.add('has-local-edit');
+    }
 
     let explanationHtml = '';
     if (item.explanation) {
@@ -341,8 +354,10 @@ export function createQuestionBlock(item, options = {}) {
             <span>连续答对 ${wrongRecord.correctStreak || 0} 次</span>
         </div>
     ` : '';
+    const editBadgeHtml = hasQuestionEdit(item.qid) ? '<span class="local-edit-badge"><i class="fa-solid fa-pen"></i> 本地修订</span>' : '';
     block.innerHTML = `
         <p>${questionHtml}</p>
+        ${editBadgeHtml}
         ${wrongMetaHtml}
         ${item.type === 'mcq' ? `<ul>${item.options.map(o => `<li>${formatInlineHtml(o, searchTerms)}</li>`).join('')}</ul>` : ''}
         <div class="action-buttons-container">
@@ -350,10 +365,160 @@ export function createQuestionBlock(item, options = {}) {
             <span class="answer-span">答案: ${item.answer}</span>
             <div class="explanation-span">${explanationHtml ? `<b>解析：</b>${explanationHtml}` : ''}</div>
             <button class="action-button favorite-button ${isFav ? 'favorited' : ''}" data-qid="${item.qid}" data-action="toggleFavorite">${isFav ? '<i class="fa-solid fa-star"></i> 已收藏' : '<i class="fa-regular fa-star"></i> 收藏'}</button>
+            <button class="action-button edit-question-button" data-qid="${item.qid}" data-action="openQuestionEditor"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
             <button class="action-button remove-wrong-answer-btn" data-qid="${item.qid}" data-chapter="${item.chapter}" data-action="removeWrongAnswer"><i class="fa-solid fa-trash-can"></i> 移除此题</button>
         </div>
     `;
     return block;
+}
+
+function refreshRenderedQuestions() {
+    if (!state.currentQuestionList.length) return;
+    const visibleBlocks = renderQuestions(state.currentQuestionList, state.currentRenderOptions);
+    visibleBlocks.forEach(block => {
+        const removeBtn = block.querySelector('.remove-wrong-answer-btn');
+        if (removeBtn) {
+            removeBtn.style.display = state.currentRenderOptions.mode === 'wrong' ? 'inline-block' : 'none';
+        }
+    });
+    typesetMath(visibleBlocks);
+    updateQuestionEditSummary();
+}
+
+export function openQuestionEditModal(qid) {
+    const question = state.question_lookup[qid];
+    if (!question) return;
+
+    document.getElementById('question-edit-qid').value = question.qid;
+    document.getElementById('question-edit-question').value = question.question || '';
+    document.getElementById('question-edit-answer').value = question.answer || '';
+    document.getElementById('question-edit-explanation').value = question.explanation || '';
+
+    const optionsField = document.getElementById('question-edit-options-field');
+    const optionsInput = document.getElementById('question-edit-options');
+    if (question.type === 'mcq') {
+        optionsField.style.display = 'grid';
+        optionsInput.value = (question.options || []).join('\n');
+    } else {
+        optionsField.style.display = 'none';
+        optionsInput.value = '';
+    }
+
+    document.getElementById('btn-discard-question-edit').disabled = !hasQuestionEdit(question.qid);
+    document.getElementById('question-edit-modal').style.display = 'block';
+    setTimeout(() => document.getElementById('question-edit-question')?.focus(), 0);
+}
+
+export function closeQuestionEditModal() {
+    document.getElementById('question-edit-modal').style.display = 'none';
+}
+
+export function handleQuestionEditSubmit(event) {
+    event.preventDefault();
+    const qid = document.getElementById('question-edit-qid').value;
+    try {
+        saveQuestionEdit(qid, {
+            question: document.getElementById('question-edit-question').value,
+            optionsText: document.getElementById('question-edit-options').value,
+            answer: document.getElementById('question-edit-answer').value,
+            explanation: document.getElementById('question-edit-explanation').value
+        });
+        closeQuestionEditModal();
+        refreshRenderedQuestions();
+        renderQuestionEditManager();
+    } catch (error) {
+        alert(error.message || '保存失败，请检查输入内容。');
+    }
+}
+
+export function discardCurrentQuestionEdit() {
+    const qid = document.getElementById('question-edit-qid').value;
+    discardQuestionEditById(qid);
+    closeQuestionEditModal();
+}
+
+export function discardQuestionEditById(qid) {
+    if (!qid || !hasQuestionEdit(qid)) return;
+    if (!confirm('确定要还原这道题的本地修订吗？')) return;
+    discardQuestionEdit(qid);
+    refreshRenderedQuestions();
+    renderQuestionEditManager();
+}
+
+export function showQuestionEditManager() {
+    renderQuestionEditManager();
+    document.getElementById('question-edit-manager-modal').style.display = 'block';
+}
+
+export function closeQuestionEditManager() {
+    document.getElementById('question-edit-manager-modal').style.display = 'none';
+}
+
+export function updateQuestionEditSummary() {
+    const button = document.querySelector('[data-action="showQuestionEditManager"]');
+    if (!button) return;
+    const count = getQuestionEditCount();
+    button.innerHTML = `<i class="fa-solid fa-pen-ruler"></i> 题目修订${count ? ` (${count})` : ''}`;
+}
+
+export function renderQuestionEditManager() {
+    const summary = document.getElementById('question-edit-summary');
+    const list = document.getElementById('question-edit-list');
+    if (!summary || !list) return;
+
+    const payload = getQuestionSyncPayload();
+    summary.innerHTML = payload.changeCount
+        ? `<strong>${payload.changeCount}</strong> 道题存在本地修订，可申请同步到 <code>question.json</code>。`
+        : '当前没有本地题目修订。';
+
+    if (!payload.changeCount) {
+        list.innerHTML = '<div class="empty-edit-state">在题卡上点击“编辑”，修改会先保存在本机。</div>';
+        updateQuestionEditSummary();
+        return;
+    }
+
+    list.innerHTML = payload.changes.map(change => {
+        const title = formatInlineHtml(change.updated.question).replace(/<\/?p>/g, '');
+        return `
+            <div class="question-edit-item">
+                <div class="question-edit-item-main">
+                    <span>${change.chapter} · ${change.type === 'mcq' ? '选择题' : '判断题'}</span>
+                    <strong>${title}</strong>
+                    <small>答案：${formatInlineHtml(change.updated.answer)}</small>
+                </div>
+                <div class="question-edit-item-actions">
+                    <button class="action-button" data-action="openQuestionEditor" data-qid="${change.qid}"><i class="fa-solid fa-pen"></i> 编辑</button>
+                    <button class="action-button remove-wrong-answer-btn" data-action="discardQuestionEdit" data-qid="${change.qid}"><i class="fa-solid fa-rotate-left"></i> 还原</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    updateQuestionEditSummary();
+}
+
+export async function copyQuestionSyncRequest() {
+    try {
+        await copyQuestionSyncPayload();
+        alert('同步申请 JSON 已复制到剪贴板。');
+    } catch (error) {
+        alert('复制失败，请改用下载同步申请。');
+    }
+}
+
+export function downloadQuestionSyncRequest() {
+    if (getQuestionEditCount() === 0) {
+        alert('当前没有需要同步的本地修订。');
+        return;
+    }
+    downloadQuestionSyncPayload();
+}
+
+export async function openQuestionSyncRequestIssue() {
+    if (getQuestionEditCount() === 0) {
+        alert('当前没有需要同步的本地修订。');
+        return;
+    }
+    await openQuestionSyncIssue();
 }
 
 export function showQuestions(chapter, type, btn) {

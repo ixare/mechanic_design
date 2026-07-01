@@ -69,6 +69,7 @@
         <button class="sidebar-button" data-action="showDashboard"><i class="fa-solid fa-chart-simple"></i> 学习统计</button>
         <button class="sidebar-button fav" data-action="showAllFavorites"><i class="fa-solid fa-star"></i> 我的收藏</button>
         <button class="sidebar-button wrong" data-action="showAllWrongAnswers"><i class="fa-solid fa-book-journal-whills"></i> 错题汇总</button>
+        <button class="sidebar-button" data-action="showQuestionEditManager"><i class="fa-solid fa-pen-ruler"></i> 题目修订</button>
         <button class="sidebar-button" data-action="showDataSync"><i class="fa-solid fa-database"></i> 数据管理</button>
         <button class="sidebar-button" data-action="triggerWallpaperUpload" style="margin-top: 5px;"><i class="fa-solid fa-image"></i> 设置壁纸</button>
         <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;">
@@ -97,6 +98,65 @@
         <div id="welcome-message" style="text-align: center; padding: 40px 0;">
             <p>请从左侧选择一个章节和题型开始练习。</p>
             <p>您也可以进行综合测试或查看您的收藏。</p>
+        </div>
+    </div>
+</div>
+
+<div id="question-edit-modal" class="modal">
+    <div class="modal-content question-edit-panel">
+        <span class="close-modal" id="close-question-edit">&times;</span>
+        <h2><i class="fa-solid fa-pen-to-square"></i> 编辑题目</h2>
+        <p class="modal-subtitle">修改会先保存到本机浏览器，并立即用于练习、搜索和测试。</p>
+        <form id="question-edit-form">
+            <input type="hidden" id="question-edit-qid">
+            <label class="form-field">
+                <span>题干</span>
+                <textarea id="question-edit-question" rows="4"></textarea>
+            </label>
+            <label class="form-field" id="question-edit-options-field">
+                <span>选项</span>
+                <textarea id="question-edit-options" rows="5" placeholder="每行一个选项，如 A．..."></textarea>
+            </label>
+            <label class="form-field">
+                <span>答案</span>
+                <input id="question-edit-answer" type="text" autocomplete="off">
+            </label>
+            <label class="form-field">
+                <span>解析</span>
+                <textarea id="question-edit-explanation" rows="5"></textarea>
+            </label>
+            <div class="question-edit-actions">
+                <button type="button" class="action-button subtle-button" id="btn-discard-question-edit"><i class="fa-solid fa-rotate-left"></i> 还原原题</button>
+                <button type="submit" class="quiz-button"><i class="fa-solid fa-floppy-disk"></i> 保存到本地</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="question-edit-manager-modal" class="modal">
+    <div class="modal-content question-edit-manager-panel">
+        <span class="close-modal" id="close-question-edit-manager">&times;</span>
+        <h2><i class="fa-solid fa-pen-ruler"></i> 题目修订</h2>
+        <p class="modal-subtitle">本地修订不会自动写入仓库。确认无误后，请提交 GitHub Issue 申请同步到 <code>question.json</code>。</p>
+        <div id="question-edit-summary" class="edit-sync-summary"></div>
+        <div id="question-edit-list" class="question-edit-list"></div>
+        <div class="question-sync-actions">
+            <button class="action-button" id="btn-copy-question-sync"><i class="fa-solid fa-copy"></i> 复制同步申请</button>
+            <button class="action-button" id="btn-download-question-sync"><i class="fa-solid fa-file-arrow-down"></i> 下载同步申请</button>
+            <button class="action-button github-button" id="btn-open-question-sync-issue"><i class="fa-brands fa-github"></i> 提交 Issue 申请同步</button>
+        </div>
+    </div>
+</div>
+
+<div id="question-notice-modal" class="modal">
+    <div class="modal-content question-notice-panel">
+        <h2><i class="fa-solid fa-circle-info"></i> 题库说明</h2>
+        <div class="notice-copy">
+            <p>本站题库可能与最新题库有出入，请以课堂、老师发布材料和最新版题库为准。</p>
+            <p>此外，我去年拿到的题库中存在一些错误，本站已人工修正过部分题目的答案。现在新增了题目编辑功能，你可以先在本地修订题目内容，再申请同步到仓库的 <code>question.json</code>。</p>
+        </div>
+        <div class="question-notice-actions">
+            <button class="quiz-button" id="btn-confirm-question-notice"><i class="fa-solid fa-check"></i> 我知道了</button>
         </div>
     </div>
 </div>
