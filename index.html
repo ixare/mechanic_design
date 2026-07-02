@@ -69,7 +69,7 @@
         <button class="sidebar-button" data-action="showDashboard"><i class="fa-solid fa-chart-simple"></i> 学习统计</button>
         <button class="sidebar-button fav" data-action="showAllFavorites"><i class="fa-solid fa-star"></i> 我的收藏</button>
         <button class="sidebar-button wrong" data-action="showAllWrongAnswers"><i class="fa-solid fa-book-journal-whills"></i> 错题汇总</button>
-        <button class="sidebar-button" data-action="showQuestionEditManager"><i class="fa-solid fa-pen-ruler"></i> 题目修订</button>
+        <button class="sidebar-button" data-action="showQuestionEditManager"><i class="fa-solid fa-pen-ruler"></i> 题目修订/录入</button>
         <button class="sidebar-button" data-action="showDataSync"><i class="fa-solid fa-database"></i> 数据管理</button>
         <button class="sidebar-button" data-action="triggerWallpaperUpload" style="margin-top: 5px;"><i class="fa-solid fa-image"></i> 设置壁纸</button>
         <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;">
@@ -99,6 +99,51 @@
             <p>请从左侧选择一个章节和题型开始练习。</p>
             <p>您也可以进行综合测试或查看您的收藏。</p>
         </div>
+    </div>
+</div>
+
+<div id="question-entry-modal" class="modal">
+    <div class="modal-content question-entry-panel">
+        <span class="close-modal" id="close-question-entry">&times;</span>
+        <h2 id="question-entry-title"><i class="fa-solid fa-square-plus"></i> 录入新题</h2>
+        <p class="modal-subtitle">新增题会先保存到本机浏览器，并立即加入练习、搜索和测试。</p>
+        <form id="question-entry-form">
+            <input type="hidden" id="question-entry-qid">
+            <div class="question-entry-meta-grid">
+                <label class="form-field">
+                    <span>章节</span>
+                    <input id="question-entry-chapter" type="text" list="question-entry-chapter-list" placeholder="例如：第十二章 轴" autocomplete="off">
+                    <datalist id="question-entry-chapter-list"></datalist>
+                </label>
+                <label class="form-field">
+                    <span>题型</span>
+                    <select id="question-entry-type">
+                        <option value="mcq">选择题</option>
+                        <option value="tf">判断题</option>
+                    </select>
+                </label>
+            </div>
+            <label class="form-field">
+                <span>题干</span>
+                <textarea id="question-entry-question" rows="4" placeholder="建议保留题号，如：12、……"></textarea>
+            </label>
+            <label class="form-field" id="question-entry-options-field">
+                <span>选项</span>
+                <textarea id="question-entry-options" rows="5" placeholder="每行一个选项，如 A．..."></textarea>
+            </label>
+            <label class="form-field">
+                <span>答案</span>
+                <input id="question-entry-answer" type="text" autocomplete="off" placeholder="选择题如 A；判断题如 ✓ 或 ×">
+            </label>
+            <label class="form-field">
+                <span>解析</span>
+                <textarea id="question-entry-explanation" rows="5" placeholder="可选，支持简单 Markdown 和 LaTeX 公式"></textarea>
+            </label>
+            <div class="question-edit-actions">
+                <button type="button" class="action-button subtle-button" id="btn-cancel-question-entry"><i class="fa-solid fa-xmark"></i> 取消</button>
+                <button type="submit" class="quiz-button" id="btn-save-question-entry"><i class="fa-solid fa-square-plus"></i> 保存新题</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -136,11 +181,12 @@
 <div id="question-edit-manager-modal" class="modal">
     <div class="modal-content question-edit-manager-panel">
         <span class="close-modal" id="close-question-edit-manager">&times;</span>
-        <h2><i class="fa-solid fa-pen-ruler"></i> 题目修订</h2>
-        <p class="modal-subtitle">本地修订不会自动写入仓库。确认无误后，请提交 GitHub Issue 申请同步到 <code>question.json</code>。</p>
+        <h2><i class="fa-solid fa-pen-ruler"></i> 题目修订/录入</h2>
+        <p class="modal-subtitle">本地修订和新增题不会自动写入仓库。确认无误后，请提交 GitHub Issue 申请同步到 <code>question.json</code>。</p>
         <div id="question-edit-summary" class="edit-sync-summary"></div>
         <div id="question-edit-list" class="question-edit-list"></div>
         <div class="question-sync-actions">
+            <button class="action-button" data-action="openQuestionEntry"><i class="fa-solid fa-square-plus"></i> 录入新题</button>
             <button class="action-button" id="btn-copy-question-sync"><i class="fa-solid fa-copy"></i> 复制同步申请</button>
             <button class="action-button" id="btn-download-question-sync"><i class="fa-solid fa-file-arrow-down"></i> 下载同步申请</button>
             <button class="action-button github-button" id="btn-open-question-sync-issue"><i class="fa-brands fa-github"></i> 提交 Issue 申请同步</button>
@@ -153,7 +199,7 @@
         <h2><i class="fa-solid fa-circle-info"></i> 题库说明</h2>
         <div class="notice-copy">
             <p>本站题库可能与最新题库有出入，请以课堂、老师发布材料和最新版题库为准。</p>
-            <p>此外，我去年拿到的题库中存在一些错误，本站已人工修正过部分题目的答案。现在新增了题目编辑功能，你可以先在本地修订题目内容，再申请同步到仓库的 <code>question.json</code>。</p>
+            <p>此外，我去年拿到的题库中存在一些错误，本站已人工修正过部分题目的答案。现在新增了题目编辑和录入功能，你可以先在本地修订或新增题目，再申请同步到仓库的 <code>question.json</code>。</p>
         </div>
         <div class="question-notice-actions">
             <button class="quiz-button" id="btn-confirm-question-notice"><i class="fa-solid fa-check"></i> 我知道了</button>

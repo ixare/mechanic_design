@@ -448,7 +448,13 @@ input:checked + .slider:before { transform: translateX(18px); }
     box-shadow: var(--shadow-sm), 0 0 0 3px rgba(245, 158, 11, 0.12);
 }
 
-.local-edit-badge {
+.question-block.has-local-addition {
+    border-color: var(--success);
+    box-shadow: var(--shadow-sm), 0 0 0 3px rgba(34, 197, 94, 0.12);
+}
+
+.local-edit-badge,
+.local-add-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -459,6 +465,11 @@ input:checked + .slider:before { transform: translateX(18px); }
     color: var(--warning);
     font-size: 0.8rem;
     font-weight: 700;
+}
+
+.local-add-badge {
+    background: rgba(34, 197, 94, 0.14);
+    color: var(--success);
 }
 
 .answer-span {
@@ -1084,6 +1095,15 @@ body.dark-mode #quiz-feedback.incorrect { color: #fee2e2; }
     animation: fadeIn 0.25s ease-out;
 }
 
+#question-edit-manager-modal {
+    z-index: 1001;
+}
+
+#question-entry-modal,
+#question-edit-modal {
+    z-index: 1002;
+}
+
 #search-modal {
     align-items: center;
     justify-content: center;
@@ -1137,13 +1157,21 @@ body.dark-mode #quiz-feedback.incorrect { color: #fee2e2; }
     font-size: 0.92rem;
 }
 
+.question-entry-panel,
 .question-edit-panel,
 .question-edit-manager-panel {
     max-width: 760px;
 }
 
+.question-entry-panel form,
 .question-edit-panel form {
     display: grid;
+    gap: 1rem;
+}
+
+.question-entry-meta-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px;
     gap: 1rem;
 }
 
@@ -1155,6 +1183,7 @@ body.dark-mode #quiz-feedback.incorrect { color: #fee2e2; }
 }
 
 .form-field input,
+.form-field select,
 .form-field textarea {
     width: 100%;
     border: 1px solid var(--border);
@@ -1171,6 +1200,7 @@ body.dark-mode #quiz-feedback.incorrect { color: #fee2e2; }
 }
 
 .form-field input:focus,
+.form-field select:focus,
 .form-field textarea:focus {
     border-color: var(--primary);
     background: var(--surface-100);
@@ -1573,6 +1603,10 @@ body.has-wallpaper #main-title {
 }
 
 @media (max-width: 768px) {
+    .question-entry-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
     .question-edit-item {
         grid-template-columns: 1fr;
     }

@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { debounce } from './utils.js';
-import { QUESTION_EDITS_KEY, loadQuestionEdits } from './questionEdits.js';
+import { QUESTION_ADDITIONS_KEY, QUESTION_EDITS_KEY, loadQuestionEdits } from './questionEdits.js';
 
 export const FAVORITES_KEY = 'mech_design_quiz_favorites';
 export const WRONG_ANSWERS_KEY = 'mech_design_wrong_answers_by_chapter';
@@ -213,7 +213,8 @@ export function exportData() {
         wrongAnswersByChapter: state.wrongAnswersByChapter,
         userStats: state.userStats,
         notepad: localStorage.getItem(NOTEPAD_KEY) || '',
-        questionEdits: state.questionEdits
+        questionEdits: state.questionEdits,
+        questionAdditions: state.questionAdditions
     };
     const json = JSON.stringify(data);
     const encoded = btoa(unescape(encodeURIComponent(json)));
@@ -276,11 +277,18 @@ export function importData() {
             if (data.questionEdits && typeof data.questionEdits === 'object' && !Array.isArray(data.questionEdits)) {
                 localStorage.setItem(QUESTION_EDITS_KEY, JSON.stringify(data.questionEdits));
                 state.questionEdits = data.questionEdits;
-                loadQuestionEdits();
             } else {
                 localStorage.removeItem(QUESTION_EDITS_KEY);
                 state.questionEdits = {};
             }
+            if (data.questionAdditions && typeof data.questionAdditions === 'object' && !Array.isArray(data.questionAdditions)) {
+                localStorage.setItem(QUESTION_ADDITIONS_KEY, JSON.stringify(data.questionAdditions));
+                state.questionAdditions = data.questionAdditions;
+            } else {
+                localStorage.removeItem(QUESTION_ADDITIONS_KEY);
+                state.questionAdditions = {};
+            }
+            loadQuestionEdits();
             saveFavorites();
             saveWrongAnswers();
             saveStats();

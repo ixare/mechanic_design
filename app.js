@@ -13,10 +13,12 @@ import {
     showQuestions, showChapterWrongAnswers, showAllFavorites, filterQuestions,
     showAllWrongAnswers, clearAllWrongAnswers, changePage, scrollToQuestionTop,
     openSearchModal, closeSearchModal,
+    closeQuestionEntryModal,
     closeQuestionEditManager, closeQuestionEditModal, copyQuestionSyncRequest,
-    discardCurrentQuestionEdit, discardQuestionEditById, downloadQuestionSyncRequest,
-    handleQuestionEditSubmit, openQuestionEditModal,
-    openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary
+    discardCurrentQuestionEdit, discardQuestionAdditionById, discardQuestionEditById, downloadQuestionSyncRequest,
+    handleQuestionEntrySubmit, handleQuestionEditSubmit, openQuestionEntryEditor, openQuestionEntryModal,
+    openQuestionEditModal,
+    openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary, updateQuestionEntryTypeFields
 } from './js/ui.js';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
@@ -27,7 +29,7 @@ import {
 import { typesetMath } from './js/utils.js';
 import { loadQuestionEdits } from './js/questionEdits.js';
 
-const QUESTION_NOTICE_KEY = 'mech_design_question_notice_2026_07_01';
+const QUESTION_NOTICE_KEY = 'mech_design_question_notice_2026_07_02';
 
 document.addEventListener('DOMContentLoaded', async () => {
     const questionBank = await loadQuestionBank();
@@ -79,6 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 case 'openSearchModal': openSearchModal(); break;
                 case 'showDataSync': showDataSync(); break;
                 case 'showQuestionEditManager': showQuestionEditManager(); break;
+                case 'openQuestionEntry': openQuestionEntryModal(); break;
                 case 'showFeedback': showFeedbackModal(); break;
                 case 'triggerWallpaperUpload': triggerWallpaperUpload(); break;
                 case 'triggerDataFileImport': document.getElementById('data-file-input')?.click(); break;
@@ -102,7 +105,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 case 'toggleFavorite': toggleFavorite(qid, actionBtn); break;
                 case 'removeWrongAnswer': removeSingleWrongAnswer(qid, chapter, actionBtn); break;
                 case 'openQuestionEditor': openQuestionEditModal(qid); break;
+                case 'openQuestionEntryEditor': openQuestionEntryEditor(qid); break;
                 case 'discardQuestionEdit': discardQuestionEditById(qid); break;
+                case 'discardQuestionAddition': discardQuestionAdditionById(qid); break;
                 
                 case 'closeQuiz': closeQuiz(); break;
             }
@@ -136,8 +141,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('close-cropper').addEventListener('click', closeCropper);
     document.getElementById('btn-confirm-crop').addEventListener('click', confirmCrop);
     document.getElementById('close-data-sync').addEventListener('click', closeDataSync);
+    document.getElementById('close-question-entry').addEventListener('click', closeQuestionEntryModal);
+    document.getElementById('btn-cancel-question-entry').addEventListener('click', closeQuestionEntryModal);
     document.getElementById('close-question-edit').addEventListener('click', closeQuestionEditModal);
     document.getElementById('close-question-edit-manager').addEventListener('click', closeQuestionEditManager);
+    document.getElementById('question-entry-form').addEventListener('submit', handleQuestionEntrySubmit);
+    document.getElementById('question-entry-type').addEventListener('change', updateQuestionEntryTypeFields);
     document.getElementById('question-edit-form').addEventListener('submit', handleQuestionEditSubmit);
     document.getElementById('btn-discard-question-edit').addEventListener('click', discardCurrentQuestionEdit);
     document.getElementById('btn-copy-question-sync').addEventListener('click', copyQuestionSyncRequest);

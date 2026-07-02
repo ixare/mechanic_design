@@ -25,6 +25,7 @@ export const state = {
     currentPage: 1,
     questionPageSize: 30,
     questionEdits: {},
+    questionAdditions: {},
     original_question_lookup: {}
 };
 

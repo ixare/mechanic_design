@@ -10,12 +10,15 @@ import {
 } from './storage.js';
 import {
     copyQuestionSyncPayload,
+    discardQuestionAddition,
     discardQuestionEdit,
     downloadQuestionSyncPayload,
     getQuestionEditCount,
     getQuestionSyncPayload,
+    hasQuestionAddition,
     hasQuestionEdit,
     openQuestionSyncIssue,
+    saveQuestionAddition,
     saveQuestionEdit
 } from './questionEdits.js';
 
@@ -40,6 +43,16 @@ function getSearchTerms(query) {
 
 function escapeRegExp(text) {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeAttribute(text) {
+    return String(text || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[char]);
 }
 
 function formatInlineHtml(text, terms = []) {
@@ -155,12 +168,16 @@ export function setupSearchFilters() {
     filterBar.addEventListener('change', () => {
         filterQuestions(searchInput.value);
     });
-    document.getElementById('search-modal')?.addEventListener('keydown', event => {
-        if (event.key !== 'Enter' || event.isComposing) return;
-        event.preventDefault();
-        filterQuestions(searchInput.value);
-        closeSearchModal();
-    });
+    const searchModal = document.getElementById('search-modal');
+    if (searchModal && !searchModal.dataset.searchEnterBound) {
+        searchModal.dataset.searchEnterBound = 'true';
+        searchModal.addEventListener('keydown', event => {
+            if (event.key !== 'Enter' || event.isComposing) return;
+            event.preventDefault();
+            filterQuestions(searchInput.value);
+            closeSearchModal();
+        });
+    }
     filterBar.querySelector('#search-chapter-select-all').addEventListener('click', () => {
         filterBar.querySelectorAll('input[name="search-chapter"]').forEach(input => { input.checked = true; });
         filterQuestions(searchInput.value);
@@ -330,8 +347,13 @@ export function createQuestionBlock(item, options = {}) {
     block.dataset.qid = item.qid;
     block.dataset.chapter = item.chapter;
     block.dataset.type = item.type;
-    if (hasQuestionEdit(item.qid)) {
+    const hasLocalEdit = hasQuestionEdit(item.qid);
+    const hasLocalAddition = hasQuestionAddition(item.qid);
+    if (hasLocalEdit) {
         block.classList.add('has-local-edit');
+    }
+    if (hasLocalAddition) {
+        block.classList.add('has-local-addition');
     }
 
     let explanationHtml = '';
@@ -354,7 +376,11 @@ export function createQuestionBlock(item, options = {}) {
             <span>连续答对 ${wrongRecord.correctStreak || 0} 次</span>
         </div>
     ` : '';
-    const editBadgeHtml = hasQuestionEdit(item.qid) ? '<span class="local-edit-badge"><i class="fa-solid fa-pen"></i> 本地修订</span>' : '';
+    const editBadgeHtml = hasLocalAddition
+        ? '<span class="local-add-badge"><i class="fa-solid fa-plus"></i> 本地新增</span>'
+        : (hasLocalEdit ? '<span class="local-edit-badge"><i class="fa-solid fa-pen"></i> 本地修订</span>' : '');
+    const editAction = hasLocalAddition ? 'openQuestionEntryEditor' : 'openQuestionEditor';
+    const editLabel = hasLocalAddition ? '编辑录入' : '编辑';
     block.innerHTML = `
         <p>${questionHtml}</p>
         ${editBadgeHtml}
@@ -365,7 +391,7 @@ export function createQuestionBlock(item, options = {}) {
             <span class="answer-span">答案: ${item.answer}</span>
             <div class="explanation-span">${explanationHtml ? `<b>解析：</b>${explanationHtml}` : ''}</div>
             <button class="action-button favorite-button ${isFav ? 'favorited' : ''}" data-qid="${item.qid}" data-action="toggleFavorite">${isFav ? '<i class="fa-solid fa-star"></i> 已收藏' : '<i class="fa-regular fa-star"></i> 收藏'}</button>
-            <button class="action-button edit-question-button" data-qid="${item.qid}" data-action="openQuestionEditor"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
+            <button class="action-button edit-question-button" data-qid="${item.qid}" data-action="${editAction}"><i class="fa-solid fa-pen-to-square"></i> ${editLabel}</button>
             <button class="action-button remove-wrong-answer-btn" data-qid="${item.qid}" data-chapter="${item.chapter}" data-action="removeWrongAnswer"><i class="fa-solid fa-trash-can"></i> 移除此题</button>
         </div>
     `;
@@ -383,6 +409,124 @@ function refreshRenderedQuestions() {
     });
     typesetMath(visibleBlocks);
     updateQuestionEditSummary();
+}
+
+function findChapterTypeButton(chapter, type) {
+    return Array.from(document.querySelectorAll('[data-action="showQuestions"]'))
+        .find(button => button.dataset.chapter === chapter && button.dataset.type === type);
+}
+
+function refreshQuestionChangeViews() {
+    const activeChapter = state.activeChapter;
+    const activeType = state.activeType;
+
+    createNavigationAndContent();
+    document.getElementById('search-filter-bar')?.remove();
+    setupSearchFilters();
+
+    if (activeChapter && activeType && state.all_data[activeChapter]) {
+        showQuestions(activeChapter, activeType, findChapterTypeButton(activeChapter, activeType));
+        return;
+    }
+
+    if (activeChapter && !state.all_data[activeChapter]) {
+        state.activeChapter = null;
+        state.activeType = null;
+        state.currentQuestionList = [];
+        state.currentRenderOptions = {};
+        state.activeChapterButton = null;
+        document.getElementById('content-area').innerHTML = '';
+        document.getElementById('main-title').textContent = '欢迎使用机械设计基础题库自测';
+        document.getElementById('welcome-message').style.display = 'block';
+        document.getElementById('welcome-message').innerHTML = '<p>请从左侧选择一个章节和题型开始练习。</p>';
+        updateGlobalControls(false);
+        updateQuestionEditSummary();
+        return;
+    }
+
+    refreshRenderedQuestions();
+    updateQuestionEditSummary();
+}
+
+function populateQuestionEntryChapters(selectedChapter = '') {
+    const chapterList = document.getElementById('question-entry-chapter-list');
+    if (!chapterList) return;
+    const chapters = Object.keys(state.all_data).sort((a, b) => getChapterOrder(a) - getChapterOrder(b));
+    chapterList.innerHTML = chapters.map(chapter => `<option value="${escapeAttribute(chapter)}"></option>`).join('');
+    const chapterInput = document.getElementById('question-entry-chapter');
+    if (chapterInput && !chapterInput.value) {
+        chapterInput.value = selectedChapter || state.activeChapter || chapters[0] || '';
+    }
+}
+
+export function updateQuestionEntryTypeFields() {
+    const type = document.getElementById('question-entry-type')?.value || 'mcq';
+    const optionsField = document.getElementById('question-entry-options-field');
+    const optionsInput = document.getElementById('question-entry-options');
+    if (!optionsField || !optionsInput) return;
+
+    if (type === 'mcq') {
+        optionsField.style.display = 'grid';
+    } else {
+        optionsField.style.display = 'none';
+        optionsInput.value = '';
+    }
+}
+
+export function openQuestionEntryModal(defaults = {}) {
+    const addition = defaults || {};
+    const qid = addition.qid || '';
+    document.getElementById('question-entry-qid').value = qid;
+    document.getElementById('question-entry-chapter').value = addition.chapter || state.activeChapter || '';
+    document.getElementById('question-entry-type').value = addition.type || state.activeType || 'mcq';
+    document.getElementById('question-entry-question').value = addition.question || '';
+    document.getElementById('question-entry-options').value = Array.isArray(addition.options) ? addition.options.join('\n') : '';
+    document.getElementById('question-entry-answer').value = addition.answer || '';
+    document.getElementById('question-entry-explanation').value = addition.explanation || '';
+    document.getElementById('question-entry-title').innerHTML = qid
+        ? '<i class="fa-solid fa-pen-to-square"></i> 编辑录入题'
+        : '<i class="fa-solid fa-square-plus"></i> 录入新题';
+    document.getElementById('btn-save-question-entry').innerHTML = qid
+        ? '<i class="fa-solid fa-floppy-disk"></i> 保存录入'
+        : '<i class="fa-solid fa-square-plus"></i> 保存新题';
+
+    populateQuestionEntryChapters(addition.chapter);
+    updateQuestionEntryTypeFields();
+    document.getElementById('question-entry-modal').style.display = 'block';
+    setTimeout(() => document.getElementById('question-entry-question')?.focus(), 0);
+}
+
+export function openQuestionEntryEditor(qid) {
+    const addition = state.questionAdditions[qid];
+    if (!addition) {
+        openQuestionEditModal(qid);
+        return;
+    }
+    openQuestionEntryModal({ ...addition, qid });
+}
+
+export function closeQuestionEntryModal() {
+    document.getElementById('question-entry-modal').style.display = 'none';
+}
+
+export function handleQuestionEntrySubmit(event) {
+    event.preventDefault();
+    const qid = document.getElementById('question-entry-qid').value;
+    try {
+        saveQuestionAddition({
+            chapter: document.getElementById('question-entry-chapter').value,
+            type: document.getElementById('question-entry-type').value,
+            question: document.getElementById('question-entry-question').value,
+            optionsText: document.getElementById('question-entry-options').value,
+            answer: document.getElementById('question-entry-answer').value,
+            explanation: document.getElementById('question-entry-explanation').value
+        }, qid);
+        closeQuestionEntryModal();
+        refreshQuestionChangeViews();
+        renderQuestionEditManager();
+    } catch (error) {
+        alert(error.message || '保存失败，请检查录入内容。');
+    }
 }
 
 export function openQuestionEditModal(qid) {
@@ -445,6 +589,14 @@ export function discardQuestionEditById(qid) {
     renderQuestionEditManager();
 }
 
+export function discardQuestionAdditionById(qid) {
+    if (!qid || !hasQuestionAddition(qid)) return;
+    if (!confirm('确定要删除这道本地新增题吗？')) return;
+    discardQuestionAddition(qid);
+    refreshQuestionChangeViews();
+    renderQuestionEditManager();
+}
+
 export function showQuestionEditManager() {
     renderQuestionEditManager();
     document.getElementById('question-edit-manager-modal').style.display = 'block';
@@ -458,7 +610,7 @@ export function updateQuestionEditSummary() {
     const button = document.querySelector('[data-action="showQuestionEditManager"]');
     if (!button) return;
     const count = getQuestionEditCount();
-    button.innerHTML = `<i class="fa-solid fa-pen-ruler"></i> 题目修订${count ? ` (${count})` : ''}`;
+    button.innerHTML = `<i class="fa-solid fa-pen-ruler"></i> 题目修订/录入${count ? ` (${count})` : ''}`;
 }
 
 export function renderQuestionEditManager() {
@@ -468,27 +620,34 @@ export function renderQuestionEditManager() {
 
     const payload = getQuestionSyncPayload();
     summary.innerHTML = payload.changeCount
-        ? `<strong>${payload.changeCount}</strong> 道题存在本地修订，可申请同步到 <code>question.json</code>。`
-        : '当前没有本地题目修订。';
+        ? `<strong>${payload.changeCount}</strong> 条本地题库变更，其中修订 ${payload.updateCount} 条、新增 ${payload.additionCount} 条，可申请同步到 <code>question.json</code>。`
+        : '当前没有本地题目修订或新增题。';
 
     if (!payload.changeCount) {
-        list.innerHTML = '<div class="empty-edit-state">在题卡上点击“编辑”，修改会先保存在本机。</div>';
+        list.innerHTML = '<div class="empty-edit-state">在题卡上点击“编辑”可修订已有题；点击“录入新题”可新增题目，都会先保存在本机。</div>';
         updateQuestionEditSummary();
         return;
     }
 
     list.innerHTML = payload.changes.map(change => {
+        const isAddition = change.operation === 'add';
         const title = formatInlineHtml(change.updated.question).replace(/<\/?p>/g, '');
+        const typeLabel = change.type === 'mcq' ? '选择题' : '判断题';
+        const operationLabel = isAddition ? '本地新增' : '本地修订';
+        const editAction = isAddition ? 'openQuestionEntryEditor' : 'openQuestionEditor';
+        const discardAction = isAddition ? 'discardQuestionAddition' : 'discardQuestionEdit';
+        const discardLabel = isAddition ? '删除' : '还原';
+        const discardIcon = isAddition ? 'fa-trash-can' : 'fa-rotate-left';
         return `
             <div class="question-edit-item">
                 <div class="question-edit-item-main">
-                    <span>${change.chapter} · ${change.type === 'mcq' ? '选择题' : '判断题'}</span>
+                    <span>${change.chapter} · ${typeLabel} · ${operationLabel}</span>
                     <strong>${title}</strong>
                     <small>答案：${formatInlineHtml(change.updated.answer)}</small>
                 </div>
                 <div class="question-edit-item-actions">
-                    <button class="action-button" data-action="openQuestionEditor" data-qid="${change.qid}"><i class="fa-solid fa-pen"></i> 编辑</button>
-                    <button class="action-button remove-wrong-answer-btn" data-action="discardQuestionEdit" data-qid="${change.qid}"><i class="fa-solid fa-rotate-left"></i> 还原</button>
+                    <button class="action-button" data-action="${editAction}" data-qid="${change.qid}"><i class="fa-solid fa-pen"></i> 编辑</button>
+                    <button class="action-button remove-wrong-answer-btn" data-action="${discardAction}" data-qid="${change.qid}"><i class="fa-solid ${discardIcon}"></i> ${discardLabel}</button>
                 </div>
             </div>
         `;
@@ -507,7 +666,7 @@ export async function copyQuestionSyncRequest() {
 
 export function downloadQuestionSyncRequest() {
     if (getQuestionEditCount() === 0) {
-        alert('当前没有需要同步的本地修订。');
+        alert('当前没有需要同步的本地修订或新增题。');
         return;
     }
     downloadQuestionSyncPayload();
@@ -515,7 +674,7 @@ export function downloadQuestionSyncRequest() {
 
 export async function openQuestionSyncRequestIssue() {
     if (getQuestionEditCount() === 0) {
-        alert('当前没有需要同步的本地修订。');
+        alert('当前没有需要同步的本地修订或新增题。');
         return;
     }
     await openQuestionSyncIssue();
