@@ -22,6 +22,8 @@ import {
     saveQuestionEdit
 } from './questionEdits.js';
 
+const CUSTOM_CHAPTER_VALUE = '__custom_chapter__';
+
 function getChapterOrder(chapterName) {
     const match = chapterName.match(/第(\S+)章/);
     if (!match) return Number.MAX_SAFE_INTEGER;
@@ -449,14 +451,42 @@ function refreshQuestionChangeViews() {
 }
 
 function populateQuestionEntryChapters(selectedChapter = '') {
-    const chapterList = document.getElementById('question-entry-chapter-list');
-    if (!chapterList) return;
+    const chapterSelect = document.getElementById('question-entry-chapter');
+    const customChapterInput = document.getElementById('question-entry-custom-chapter');
+    if (!chapterSelect || !customChapterInput) return;
+
     const chapters = Object.keys(state.all_data).sort((a, b) => getChapterOrder(a) - getChapterOrder(b));
-    chapterList.innerHTML = chapters.map(chapter => `<option value="${escapeAttribute(chapter)}"></option>`).join('');
-    const chapterInput = document.getElementById('question-entry-chapter');
-    if (chapterInput && !chapterInput.value) {
-        chapterInput.value = selectedChapter || state.activeChapter || chapters[0] || '';
+    const targetChapter = selectedChapter || state.activeChapter || chapters[0] || '';
+    chapterSelect.innerHTML = [
+        ...chapters.map(chapter => `<option value="${escapeAttribute(chapter)}">${escapeAttribute(chapter)}</option>`),
+        `<option value="${CUSTOM_CHAPTER_VALUE}">自定义章节...</option>`
+    ].join('');
+
+    if (chapters.includes(targetChapter)) {
+        chapterSelect.value = targetChapter;
+        customChapterInput.value = '';
+    } else {
+        chapterSelect.value = CUSTOM_CHAPTER_VALUE;
+        customChapterInput.value = targetChapter;
     }
+    updateQuestionEntryChapterField();
+}
+
+function getQuestionEntryChapterValue() {
+    const chapterSelect = document.getElementById('question-entry-chapter');
+    const customChapterInput = document.getElementById('question-entry-custom-chapter');
+    if (!chapterSelect || !customChapterInput) return '';
+    return chapterSelect.value === CUSTOM_CHAPTER_VALUE ? customChapterInput.value : chapterSelect.value;
+}
+
+export function updateQuestionEntryChapterField() {
+    const chapterSelect = document.getElementById('question-entry-chapter');
+    const customChapterInput = document.getElementById('question-entry-custom-chapter');
+    if (!chapterSelect || !customChapterInput) return;
+
+    const isCustom = chapterSelect.value === CUSTOM_CHAPTER_VALUE;
+    customChapterInput.style.display = isCustom ? 'block' : 'none';
+    customChapterInput.required = isCustom;
 }
 
 export function updateQuestionEntryTypeFields() {
@@ -477,7 +507,6 @@ export function openQuestionEntryModal(defaults = {}) {
     const addition = defaults || {};
     const qid = addition.qid || '';
     document.getElementById('question-entry-qid').value = qid;
-    document.getElementById('question-entry-chapter').value = addition.chapter || state.activeChapter || '';
     document.getElementById('question-entry-type').value = addition.type || state.activeType || 'mcq';
     document.getElementById('question-entry-question').value = addition.question || '';
     document.getElementById('question-entry-options').value = Array.isArray(addition.options) ? addition.options.join('\n') : '';
@@ -490,7 +519,7 @@ export function openQuestionEntryModal(defaults = {}) {
         ? '<i class="fa-solid fa-floppy-disk"></i> 保存录入'
         : '<i class="fa-solid fa-square-plus"></i> 保存新题';
 
-    populateQuestionEntryChapters(addition.chapter);
+    populateQuestionEntryChapters(addition.chapter || state.activeChapter || '');
     updateQuestionEntryTypeFields();
     document.getElementById('question-entry-modal').style.display = 'block';
     setTimeout(() => document.getElementById('question-entry-question')?.focus(), 0);
@@ -514,7 +543,7 @@ export function handleQuestionEntrySubmit(event) {
     const qid = document.getElementById('question-entry-qid').value;
     try {
         saveQuestionAddition({
-            chapter: document.getElementById('question-entry-chapter').value,
+            chapter: getQuestionEntryChapterValue(),
             type: document.getElementById('question-entry-type').value,
             question: document.getElementById('question-entry-question').value,
             optionsText: document.getElementById('question-entry-options').value,

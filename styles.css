@@ -1175,6 +1175,10 @@ body.dark-mode #quiz-feedback.incorrect { color: #fee2e2; }
     gap: 1rem;
 }
 
+.question-entry-custom-chapter {
+    display: none;
+}
+
 .form-field {
     display: grid;
     gap: 0.45rem;

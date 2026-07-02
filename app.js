@@ -18,7 +18,8 @@ import {
     discardCurrentQuestionEdit, discardQuestionAdditionById, discardQuestionEditById, downloadQuestionSyncRequest,
     handleQuestionEntrySubmit, handleQuestionEditSubmit, openQuestionEntryEditor, openQuestionEntryModal,
     openQuestionEditModal,
-    openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary, updateQuestionEntryTypeFields
+    openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary,
+    updateQuestionEntryChapterField, updateQuestionEntryTypeFields
 } from './js/ui.js';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
@@ -146,6 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('close-question-edit').addEventListener('click', closeQuestionEditModal);
     document.getElementById('close-question-edit-manager').addEventListener('click', closeQuestionEditManager);
     document.getElementById('question-entry-form').addEventListener('submit', handleQuestionEntrySubmit);
+    document.getElementById('question-entry-chapter').addEventListener('change', updateQuestionEntryChapterField);
     document.getElementById('question-entry-type').addEventListener('change', updateQuestionEntryTypeFields);
     document.getElementById('question-edit-form').addEventListener('submit', handleQuestionEditSubmit);
     document.getElementById('btn-discard-question-edit').addEventListener('click', discardCurrentQuestionEdit);
