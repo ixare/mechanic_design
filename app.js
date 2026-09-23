@@ -20,7 +20,7 @@ import {
     openQuestionEditModal,
     openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary,
     updateQuestionEntryChapterField, updateQuestionEntryTypeFields
-} from './js/ui.js?v=20260923-index-2';
+} from './js/ui.js?v=20260923-chapter-rail';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
     startCurrentChapterWrongAnswersTest, startChapterTest,

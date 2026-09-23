@@ -26,7 +26,7 @@
     <link href="https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
     <script src="https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     
-    <link rel="stylesheet" href="styles.css?v=20260923-wallpaper">
+    <link rel="stylesheet" href="styles.css?v=20260923-chapter-rail">
 </head>
 <body>
 
@@ -72,10 +72,6 @@
         <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;">
         <button class="sidebar-button" data-action="showFeedback" style="margin-top: 5px;"><i data-lucide="message-circle"></i> 意见反馈</button>
     </div>
-    <div class="sidebar-section">
-        <h4>章节列表</h4>
-        <div id="chapter-nav-list"></div>
-    </div>
 </div>
 
     <div id="main-content">
@@ -95,8 +91,16 @@
              <button id="toggle-favorites-btn">只显示收藏</button>
              <button id="toggle-all-answers-btn">显示全部答案</button>
         </div>
-        <div id="content-area"></div>
-        <div id="welcome-message"></div>
+        <div class="study-layout">
+            <div class="study-content">
+                <div id="content-area"></div>
+                <div id="welcome-message"></div>
+            </div>
+            <aside class="chapter-rail" aria-label="章节列表">
+                <div class="chapter-rail-header"><h2>章节列表</h2></div>
+                <nav id="chapter-nav-list" aria-label="章节练习导航"></nav>
+            </aside>
+        </div>
     </div>
 </div>
 
@@ -347,6 +351,6 @@
 </div>
 
 <script src="questions.js"></script>
-<script type="module" src="app.js?v=20260923-index-2"></script>
+<script type="module" src="app.js?v=20260923-chapter-rail"></script>
 </body>
 </html>

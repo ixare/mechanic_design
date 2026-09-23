@@ -28,6 +28,7 @@ let questionIndexView = 'list';
 let questionIndexScrollHandler = null;
 let questionIndexResizeHandler = null;
 let questionIndexFrame = null;
+let chapterRailFrame = null;
 
 function stopQuestionIndexTracking() {
     if (questionIndexFrame !== null) {
@@ -54,6 +55,26 @@ function sizeQuestionIndex() {
     const top = Math.max(20, panel.getBoundingClientRect().top);
     const height = `${Math.max(280, window.innerHeight - top - 20)}px`;
     if (panel.style.height !== height) panel.style.height = height;
+}
+
+function sizeChapterRail() {
+    const rail = document.querySelector('.chapter-rail');
+    if (!rail) return;
+    if (window.matchMedia('(max-width: 720px)').matches) {
+        rail.style.height = '';
+        return;
+    }
+    const top = Math.max(20, rail.getBoundingClientRect().top);
+    const height = `${Math.max(80, window.innerHeight - top - 20)}px`;
+    if (rail.style.height !== height) rail.style.height = height;
+}
+
+function scheduleChapterRailSize() {
+    if (chapterRailFrame !== null) return;
+    chapterRailFrame = requestAnimationFrame(() => {
+        chapterRailFrame = null;
+        sizeChapterRail();
+    });
 }
 
 function getChapterOrder(chapterName) {
@@ -145,6 +166,8 @@ export function setupMobileMenu() {
             document.body.classList.remove('right-sidebar-open');
         }
     });
+    window.addEventListener('scroll', scheduleChapterRailSize, { passive: true });
+    window.addEventListener('resize', scheduleChapterRailSize);
 }
 
 export function setupSearchFilters() {
@@ -243,6 +266,7 @@ export function updateGlobalControls(show, options = {}) {
         disposeMechanismCanvas();
     }
     document.getElementById('global-controls').style.display = show ? 'flex' : 'none';
+    scheduleChapterRailSize();
     if (!show) return;
 
     document.getElementById('toggle-favorites-btn').style.display = 'none';
@@ -338,7 +362,7 @@ function renderWelcomeOverview() {
         <section class="welcome-stage" aria-label="练习概览">
             <div class="stage-copy">
                 <div class="stage-heading"><span class="stage-rule"></span><span>课程自测 / 章节练习</span></div>
-                <h2>先选一章，<br>开始练习。</h2>
+                <h2>从题出发，<br>理解机械。</h2>
                 <div class="stage-actions">
                     <button type="button" class="stage-primary" data-action="showQuestions" data-chapter="${escapeAttribute(firstChapter || '')}" data-type="mcq">开始章节练习 <i data-lucide="arrow-up-right"></i></button>
                     <button type="button" class="stage-secondary" data-action="startMockExam"><i data-lucide="timer"></i> 模拟考试</button>
@@ -404,6 +428,7 @@ export function showHome() {
     updateGlobalControls(false);
     document.body.classList.add('home-view');
     renderWelcomeOverview();
+    scheduleChapterRailSize();
     document.body.classList.remove('sidebar-open');
     window.scrollTo(0, 0);
 }
@@ -467,6 +492,7 @@ export function renderQuestions(questionsList, options = {}) {
 
     workspace.append(indexPanel, questionList);
     contentArea.appendChild(workspace);
+    scheduleChapterRailSize();
     setQuestionIndexView(questionIndexView);
     updateQuestionIndexCount();
     if (questionsList.length) setActiveQuestionIndex(questionsList[0].qid);
@@ -665,7 +691,7 @@ function refreshQuestionChangeViews() {
         document.getElementById('content-area').innerHTML = '';
         document.getElementById('main-title').textContent = '欢迎使用机械设计基础题库自测';
         document.getElementById('welcome-message').style.display = 'block';
-        document.getElementById('welcome-message').innerHTML = '<p>请从左侧选择一个章节和题型开始练习。</p>';
+        document.getElementById('welcome-message').innerHTML = '<p>请从章节索引选择一个章节和题型开始练习。</p>';
         updateGlobalControls(false);
         updateQuestionEditSummary();
         return;
