@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
+import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260923';
 import {
     getWrongAnswerEntries,
     getWrongAnswerQids,
@@ -96,7 +97,7 @@ export function setupMobileMenu() {
     });
 
     sidebar.addEventListener('click', (event) => {
-        if (event.target.tagName === 'BUTTON' && window.innerWidth <= 992) {
+        if (event.target.closest('button') && window.innerWidth <= 992) {
             document.body.classList.remove('sidebar-open');
         }
     });
@@ -206,6 +207,10 @@ export function updateChapterNavStatus() {
 }
 
 export function updateGlobalControls(show, options = {}) {
+    if (show) {
+        document.body.classList.remove('home-view');
+        disposeMechanismCanvas();
+    }
     document.getElementById('global-controls').style.display = show ? 'flex' : 'none';
     if (!show) return;
 
@@ -241,6 +246,10 @@ export function createNavigationAndContent() {
         
         const summary = document.createElement('summary');
         summary.textContent = chapterName;
+        const chevron = document.createElement('i');
+        chevron.dataset.lucide = 'chevron-right';
+        chevron.className = 'chapter-chevron';
+        summary.appendChild(chevron);
         details.appendChild(summary);
 
         const buttonContainer = document.createElement('div');
@@ -254,7 +263,7 @@ export function createNavigationAndContent() {
         
         const mcqBtn = document.createElement('button');
         mcqBtn.className = 'chapter-type-button';
-        mcqBtn.innerHTML = '<i class="fa-solid fa-list-ul"></i> 选择题';
+        mcqBtn.innerHTML = '<i data-lucide="list"></i> 选择题';
         mcqBtn.dataset.chapter = chapterName;
         mcqBtn.dataset.type = 'mcq';
         mcqBtn.dataset.action = 'showQuestions';
@@ -262,7 +271,7 @@ export function createNavigationAndContent() {
 
         const tfBtn = document.createElement('button');
         tfBtn.className = 'chapter-type-button';
-        tfBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> 判断题';
+        tfBtn.innerHTML = '<i data-lucide="check-check"></i> 判断题';
         tfBtn.dataset.chapter = chapterName;
         tfBtn.dataset.type = 'tf';
         tfBtn.dataset.action = 'showQuestions';
@@ -270,7 +279,7 @@ export function createNavigationAndContent() {
 
         const testBtn = document.createElement('button');
         testBtn.className = 'chapter-test-button';
-        testBtn.innerHTML = '<i class="fa-solid fa-flask"></i> 本章测试';
+        testBtn.innerHTML = '<i data-lucide="flask-conical"></i> 本章测试';
         testBtn.dataset.chapter = chapterName;
         testBtn.dataset.action = 'startChapterTest';
         buttonContainer.appendChild(testBtn);
@@ -280,6 +289,91 @@ export function createNavigationAndContent() {
     });
 
     updateChapterNavStatus();
+    showHome();
+}
+
+function renderWelcomeOverview() {
+    const chapters = Object.keys(state.all_data).sort((a, b) => getChapterOrder(a) - getChapterOrder(b));
+    const totalQuestions = chapters.reduce((sum, chapter) => {
+        const group = state.all_data[chapter];
+        return sum + group.mcq.length + group.tf.length;
+    }, 0);
+    const completed = state.userStats.total;
+    const accuracy = completed ? Math.round(state.userStats.correct / completed * 100) : 0;
+    const firstChapter = chapters.find(chapter => state.all_data[chapter].mcq.length) || chapters[0];
+    const welcome = document.getElementById('welcome-message');
+
+    welcome.innerHTML = `
+        <section class="welcome-stage" aria-label="练习概览">
+            <div class="stage-copy">
+                <div class="stage-heading"><span class="stage-rule"></span><span>课程自测 / 章节练习</span></div>
+                <h2>先选一章，<br>开始练习。</h2>
+                <div class="stage-actions">
+                    <button type="button" class="stage-primary" data-action="showQuestions" data-chapter="${escapeAttribute(firstChapter || '')}" data-type="mcq">开始章节练习 <i data-lucide="arrow-up-right"></i></button>
+                    <button type="button" class="stage-secondary" data-action="startMockExam"><i data-lucide="timer"></i> 模拟考试</button>
+                </div>
+                <div class="stage-metrics">
+                    <div><strong>${totalQuestions}</strong><span>题库题目</span></div>
+                    <div><strong>${completed}</strong><span>累计练习</span></div>
+                    <div><strong>${accuracy}%</strong><span>练习正确率</span></div>
+                </div>
+            </div>
+            <div class="mechanism-visual">
+                <canvas id="mechanism-canvas" role="img" aria-label="可拖动的啮合齿轮示意图"></canvas>
+                <span class="mechanism-label mechanism-label-top">齿轮传动 / 24 : 16</span>
+                <span class="mechanism-label mechanism-label-bottom">输入轴 / 输出轴</span>
+            </div>
+        </section>
+        <section class="chapter-index" aria-labelledby="chapter-index-title">
+            <div class="chapter-index-heading">
+                <div><span class="section-kicker">按章节练习</span><h2 id="chapter-index-title">章节索引</h2></div>
+                <span class="chapter-total">${chapters.length} 章 / ${totalQuestions} 题</span>
+            </div>
+            <div class="chapter-grid">
+                ${chapters.map((chapter, index) => {
+                    const group = state.all_data[chapter];
+                    const count = group.mcq.length + group.tf.length;
+                    const label = chapter.replace(/^第[^章]+章\s*/, '');
+                    return `<div class="chapter-row">
+                        <button type="button" class="chapter-main" data-action="showQuestions" data-chapter="${escapeAttribute(chapter)}" data-type="mcq" aria-label="${escapeAttribute(chapter)}选择题">
+                            <span class="chapter-number">${String(index + 1).padStart(2, '0')}</span>
+                            <span class="chapter-name">${escapeAttribute(label)}</span>
+                            <span class="chapter-count">${count} 题</span>
+                        </button>
+                        <div class="chapter-row-actions">
+                            <button type="button" data-action="showQuestions" data-chapter="${escapeAttribute(chapter)}" data-type="mcq" title="${escapeAttribute(chapter)}选择题" aria-label="${escapeAttribute(chapter)}选择题"><i data-lucide="list"></i></button>
+                            <button type="button" data-action="showQuestions" data-chapter="${escapeAttribute(chapter)}" data-type="tf" title="${escapeAttribute(chapter)}判断题" aria-label="${escapeAttribute(chapter)}判断题"><i data-lucide="check-check"></i></button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        </section>
+    `;
+    initMechanismCanvas();
+}
+
+export function showHome() {
+    state.activeChapter = null;
+    state.activeType = null;
+    if (state.activeChapterButton) {
+        state.activeChapterButton.classList.remove('active');
+        state.activeChapterButton = null;
+    }
+    const searchInput = document.getElementById('global-search');
+    if (searchInput) searchInput.value = '';
+    const typeFilter = document.getElementById('search-type-filter');
+    const scopeFilter = document.getElementById('search-scope-filter');
+    if (typeFilter) typeFilter.value = 'all';
+    if (scopeFilter) scopeFilter.value = 'all';
+    document.querySelectorAll('input[name="search-chapter"]').forEach(input => { input.checked = true; });
+    document.getElementById('main-title').textContent = '机械设计基础';
+    document.getElementById('content-area').innerHTML = '';
+    document.getElementById('welcome-message').style.display = 'block';
+    updateGlobalControls(false);
+    document.body.classList.add('home-view');
+    renderWelcomeOverview();
+    document.body.classList.remove('sidebar-open');
+    window.scrollTo(0, 0);
 }
 
 export function renderQuestions(questionsList, options = {}) {
@@ -310,14 +404,14 @@ function renderPagination(contentArea, total, totalPages, options) {
     pagination.className = 'pagination-controls';
     pagination.innerHTML = `
         <button class="action-button pagination-button" data-action="changePage" data-page="${state.currentPage - 1}" ${state.currentPage === 1 ? 'disabled' : ''}>
-            <i class="fa-solid fa-chevron-left"></i> 上一页
+            <i data-lucide="chevron-left"></i> 上一页
         </button>
         <span class="pagination-status">第 ${state.currentPage} / ${totalPages} 页，共 ${total} 题</span>
         <button class="action-button pagination-button" data-action="changePage" data-page="${state.currentPage + 1}" ${state.currentPage === totalPages ? 'disabled' : ''}>
-            下一页 <i class="fa-solid fa-chevron-right"></i>
+            下一页 <i data-lucide="chevron-right"></i>
         </button>
         <button class="action-button pagination-top-button" data-action="scrollToQuestionTop" title="回到题目顶部" aria-label="回到题目顶部">
-            <i class="fa-solid fa-arrow-up"></i> 回顶
+            <i data-lucide="arrow-up"></i> 回顶
         </button>
     `;
     pagination.dataset.renderMode = options.mode || 'list';
@@ -379,8 +473,8 @@ export function createQuestionBlock(item, options = {}) {
         </div>
     ` : '';
     const editBadgeHtml = hasLocalAddition
-        ? '<span class="local-add-badge"><i class="fa-solid fa-plus"></i> 本地新增</span>'
-        : (hasLocalEdit ? '<span class="local-edit-badge"><i class="fa-solid fa-pen"></i> 本地修订</span>' : '');
+        ? '<span class="local-add-badge"><i data-lucide="plus"></i> 本地新增</span>'
+        : (hasLocalEdit ? '<span class="local-edit-badge"><i data-lucide="pen"></i> 本地修订</span>' : '');
     const editAction = hasLocalAddition ? 'openQuestionEntryEditor' : 'openQuestionEditor';
     const editLabel = hasLocalAddition ? '编辑录入' : '编辑';
     block.innerHTML = `
@@ -389,12 +483,12 @@ export function createQuestionBlock(item, options = {}) {
         ${wrongMetaHtml}
         ${item.type === 'mcq' ? `<ul>${item.options.map(o => `<li>${formatInlineHtml(o, searchTerms)}</li>`).join('')}</ul>` : ''}
         <div class="action-buttons-container">
-            <button class="action-button" data-action="toggleAnswer" data-state="hidden"><i class="fa-regular fa-eye"></i> 显示答案</button>
+            <button class="action-button" data-action="toggleAnswer" data-state="hidden"><i data-lucide="eye"></i> 显示答案</button>
             <span class="answer-span">答案: ${item.answer}</span>
             <div class="explanation-span">${explanationHtml ? `<b>解析：</b>${explanationHtml}` : ''}</div>
-            <button class="action-button favorite-button ${isFav ? 'favorited' : ''}" data-qid="${item.qid}" data-action="toggleFavorite">${isFav ? '<i class="fa-solid fa-star"></i> 已收藏' : '<i class="fa-regular fa-star"></i> 收藏'}</button>
-            <button class="action-button edit-question-button" data-qid="${item.qid}" data-action="${editAction}"><i class="fa-solid fa-pen-to-square"></i> ${editLabel}</button>
-            <button class="action-button remove-wrong-answer-btn" data-qid="${item.qid}" data-chapter="${item.chapter}" data-action="removeWrongAnswer"><i class="fa-solid fa-trash-can"></i> 移除此题</button>
+            <button class="action-button favorite-button ${isFav ? 'favorited' : ''}" data-qid="${item.qid}" data-action="toggleFavorite">${isFav ? '<i data-lucide="star"></i> 已收藏' : '<i data-lucide="star"></i> 收藏'}</button>
+            <button class="action-button edit-question-button" data-qid="${item.qid}" data-action="${editAction}"><i data-lucide="square-pen"></i> ${editLabel}</button>
+            <button class="action-button remove-wrong-answer-btn" data-qid="${item.qid}" data-chapter="${item.chapter}" data-action="removeWrongAnswer"><i data-lucide="trash-2"></i> 移除此题</button>
         </div>
     `;
     return block;
@@ -513,11 +607,11 @@ export function openQuestionEntryModal(defaults = {}) {
     document.getElementById('question-entry-answer').value = addition.answer || '';
     document.getElementById('question-entry-explanation').value = addition.explanation || '';
     document.getElementById('question-entry-title').innerHTML = qid
-        ? '<i class="fa-solid fa-pen-to-square"></i> 编辑录入题'
-        : '<i class="fa-solid fa-square-plus"></i> 录入新题';
+        ? '<i data-lucide="square-pen"></i> 编辑录入题'
+        : '<i data-lucide="square-plus"></i> 录入新题';
     document.getElementById('btn-save-question-entry').innerHTML = qid
-        ? '<i class="fa-solid fa-floppy-disk"></i> 保存录入'
-        : '<i class="fa-solid fa-square-plus"></i> 保存新题';
+        ? '<i data-lucide="save"></i> 保存录入'
+        : '<i data-lucide="square-plus"></i> 保存新题';
 
     populateQuestionEntryChapters(addition.chapter || state.activeChapter || '');
     updateQuestionEntryTypeFields();
@@ -639,7 +733,7 @@ export function updateQuestionEditSummary() {
     const button = document.querySelector('[data-action="showQuestionEditManager"]');
     if (!button) return;
     const count = getQuestionEditCount();
-    button.innerHTML = `<i class="fa-solid fa-pen-ruler"></i> 题目修订/录入${count ? ` (${count})` : ''}`;
+    button.innerHTML = `<i data-lucide="file-pen-line"></i> 题目修订/录入${count ? ` (${count})` : ''}`;
 }
 
 export function renderQuestionEditManager() {
@@ -666,7 +760,7 @@ export function renderQuestionEditManager() {
         const editAction = isAddition ? 'openQuestionEntryEditor' : 'openQuestionEditor';
         const discardAction = isAddition ? 'discardQuestionAddition' : 'discardQuestionEdit';
         const discardLabel = isAddition ? '删除' : '还原';
-        const discardIcon = isAddition ? 'fa-trash-can' : 'fa-rotate-left';
+        const discardIcon = isAddition ? 'trash-2' : 'rotate-ccw';
         return `
             <div class="question-edit-item">
                 <div class="question-edit-item-main">
@@ -675,8 +769,8 @@ export function renderQuestionEditManager() {
                     <small>答案：${formatInlineHtml(change.updated.answer)}</small>
                 </div>
                 <div class="question-edit-item-actions">
-                    <button class="action-button" data-action="${editAction}" data-qid="${change.qid}"><i class="fa-solid fa-pen"></i> 编辑</button>
-                    <button class="action-button remove-wrong-answer-btn" data-action="${discardAction}" data-qid="${change.qid}"><i class="fa-solid ${discardIcon}"></i> ${discardLabel}</button>
+                    <button class="action-button" data-action="${editAction}" data-qid="${change.qid}"><i data-lucide="pen"></i> 编辑</button>
+                    <button class="action-button remove-wrong-answer-btn" data-action="${discardAction}" data-qid="${change.qid}"><i data-lucide="${discardIcon}"></i> ${discardLabel}</button>
                 </div>
             </div>
         `;
@@ -710,6 +804,7 @@ export async function openQuestionSyncRequestIssue() {
 }
 
 export function showQuestions(chapter, type, btn) {
+    window.scrollTo(0, 0);
     state.activeChapter = chapter;
     state.activeType = type;
 
@@ -734,6 +829,7 @@ export function showQuestions(chapter, type, btn) {
 }
 
 export function showChapterWrongAnswers(chapterName, btn) {
+    window.scrollTo(0, 0);
     state.activeChapter = chapterName;
     state.activeType = null;
     
@@ -767,6 +863,7 @@ export function showChapterWrongAnswers(chapterName, btn) {
 }
 
 export function showAllWrongAnswers() {
+    window.scrollTo(0, 0);
     state.activeChapter = null;
     state.activeType = null;
     
@@ -798,6 +895,7 @@ export function showAllWrongAnswers() {
 }
 
 export function showAllFavorites() {
+    window.scrollTo(0, 0);
     state.activeChapter = null;
     state.activeType = null;
     
@@ -847,11 +945,7 @@ export function filterQuestions(query) {
     }
     
     if (!hasActiveSearch) {
-        document.getElementById('content-area').innerHTML = '';
-        document.getElementById('welcome-message').style.display = 'block';
-        document.getElementById('welcome-message').innerHTML = '<p>请从左侧选择一个章节和题型开始练习。</p><p>也可以使用左侧全局搜索筛选题目。</p>';
-        updateGlobalControls(false);
-        document.getElementById('main-title').textContent = '欢迎使用机械设计基础题库自测';
+        showHome();
         return;
     }
 
@@ -1056,7 +1150,7 @@ export function confirmCrop() {
         localStorage.setItem(WALLPAPER_KEY, dataUrl);
         applyWallpaper(dataUrl);
         closeCropper();
-        alert('壁纸设置成功！✨');
+        alert('壁纸设置成功。');
     } catch (error) {
          alert('设置失败：裁剪后的图片可能还是太大。请尝试裁剪更小的区域。');
          console.error(error);
@@ -1132,7 +1226,7 @@ export function toggleFavorite(qid, btn) {
     if (index > -1) {
         state.favorites.splice(index, 1);
         btn.classList.remove('favorited');
-        btn.innerHTML = '<i class="fa-regular fa-star"></i> 收藏';
+        btn.innerHTML = '<i data-lucide="star"></i> 收藏';
         
         if (state.activeChapter === null && state.activeType === null && document.getElementById('main-title').textContent === '我的收藏') {
             const block = btn.closest('.question-block');
@@ -1144,7 +1238,7 @@ export function toggleFavorite(qid, btn) {
     } else {
         state.favorites.push(qid);
         btn.classList.add('favorited');
-        btn.innerHTML = '<i class="fa-solid fa-star"></i> 已收藏';
+        btn.innerHTML = '<i data-lucide="star"></i> 已收藏';
     }
     saveFavorites();
 }

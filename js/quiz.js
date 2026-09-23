@@ -86,8 +86,8 @@ function ensureRandomTestModal() {
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-content random-test-panel">
-            <span class="close-modal" id="close-random-test-modal">&times;</span>
-            <h2 id="random-test-title"><i class="fa-solid fa-sliders"></i> 随机测试设置</h2>
+            <button class="close-modal" type="button" id="close-random-test-modal" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
+            <h2 id="random-test-title"><i data-lucide="sliders-horizontal"></i> 随机测试设置</h2>
             <div class="random-test-section">
                 <div class="random-test-section-title">抽题来源</div>
                 <div class="random-source-options">
@@ -108,7 +108,7 @@ function ensureRandomTestModal() {
             </div>
             <div id="random-test-summary" class="random-test-summary"></div>
             <div class="random-test-actions">
-                <button class="quiz-button" id="start-random-test-confirm"><i class="fa-solid fa-play"></i> 开始测试</button>
+                <button class="quiz-button" id="start-random-test-confirm"><i data-lucide="play"></i> 开始测试</button>
             </div>
         </div>
     `;
@@ -183,7 +183,7 @@ export function openRandomTestSetup(mode) {
         mcq: '选择题随机测试设置',
         tf: '判断题随机测试设置'
     };
-    document.getElementById('random-test-title').innerHTML = `<i class="fa-solid fa-sliders"></i> ${titleMap[mode] || '随机测试设置'}`;
+    document.getElementById('random-test-title').innerHTML = `<i data-lucide="sliders-horizontal"></i> ${titleMap[mode] || '随机测试设置'}`;
     modal.querySelector('input[name="random-test-source"][value="all"]').checked = true;
     renderRandomTestChapters();
     updateRandomTestSummary();
@@ -348,7 +348,7 @@ export function displayQuizQuestion() {
         const favBtn = document.getElementById('quiz-favorite-btn');
         favBtn.style.display = 'inline-block';
         favBtn.className = `action-button favorite-button ${state.favorites.includes(question.qid) ? 'favorited' : ''}`;
-        favBtn.innerHTML = state.favorites.includes(question.qid) ? '<i class="fa-solid fa-star"></i> 已收藏' : '<i class="fa-regular fa-star"></i> 收藏';
+        favBtn.innerHTML = state.favorites.includes(question.qid) ? '<i data-lucide="star"></i> 已收藏' : '<i data-lucide="star"></i> 收藏';
         favBtn.dataset.qid = question.qid;
         favBtn.dataset.action = "toggleFavorite";
 
@@ -500,7 +500,7 @@ export function showQuizResults() {
     }).join('');
 
     const wrongRetryButton = state.lastWrongQuizQuestions.length > 0
-        ? '<button class="quiz-button" data-action="startLastWrongQuizTest"><i class="fa-solid fa-rotate-right"></i> 重练本次错题</button>'
+        ? '<button class="quiz-button" data-action="startLastWrongQuizTest"><i data-lucide="rotate-cw"></i> 重练本次错题</button>'
         : '';
 
     scoreEl.innerHTML = `

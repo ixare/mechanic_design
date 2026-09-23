@@ -42,8 +42,8 @@
 本项目是一个纯前端静态应用。
 
 - **核心**: HTML5, CSS3, ES6+ Module (拆分架构: state.js / storage.js / ui.js / quiz.js)
-- **图标**: Font Awesome
-- **字体**: Google Fonts (Inter, Noto Sans SC)
+- **图标**: Lucide
+- **字体**: Google Fonts (Barlow Condensed, IBM Plex Sans, Noto Sans SC)
 - **数学渲染**: MathJax
 - **Markdown 渲染**: Marked.js
 - **安全过滤**: DOMPurify

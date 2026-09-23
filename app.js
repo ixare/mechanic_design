@@ -4,7 +4,7 @@ import {
     saveNotepad, exportData, copyExportData, importData, importDataFile, changeTheme
 } from './js/storage.js';
 import { 
-    setupMobileMenu, createNavigationAndContent, toggleRightSidebar, 
+    setupMobileMenu, createNavigationAndContent, toggleRightSidebar, showHome,
     setupSearchFilters,
     showDashboard, closeDashboard, showDataSync, closeDataSync, 
     downloadNotepadTxt, initWallpaper, triggerWallpaperUpload, 
@@ -20,19 +20,21 @@ import {
     openQuestionEditModal,
     openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary,
     updateQuestionEntryChapterField, updateQuestionEntryTypeFields
-} from './js/ui.js';
+} from './js/ui.js?v=20260923';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
     startCurrentChapterWrongAnswersTest, startChapterTest,
     startLastWrongQuizTest, submitQuizAnswer, nextQuizQuestion, closeQuiz,
     openRandomTestSetup
-} from './js/quiz.js';
+} from './js/quiz.js?v=20260923';
 import { typesetMath } from './js/utils.js';
 import { loadQuestionEdits } from './js/questionEdits.js';
+import { initIcons } from './js/icons.js?v=20260923';
 
 const QUESTION_NOTICE_KEY = 'mech_design_question_notice_2026_07_02';
 
 document.addEventListener('DOMContentLoaded', async () => {
+    initIcons();
     const questionBank = await loadQuestionBank();
     processData(questionBank);
     loadQuestionEdits();
@@ -71,6 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const chapter = actionBtn.dataset.chapter;
 
             switch(action) {
+                case 'showHome': showHome(); break;
                 case 'startMockExam': openRandomTestSetup('exam'); break;
                 case 'startOverallTestMcq': openRandomTestSetup('mcq'); break;
                 case 'startOverallTestTf': openRandomTestSetup('tf'); break;
@@ -100,7 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     answerSpan.style.display = isShowing ? 'none' : 'inline';
                     explanationSpan.style.display = isShowing ? 'none' : 'block';
                     actionBtn.dataset.state = isShowing ? 'hidden' : 'shown';
-                    actionBtn.innerHTML = isShowing ? '<i class="fa-regular fa-eye"></i> 显示答案' : '<i class="fa-regular fa-eye-slash"></i> 隐藏答案';
+                    actionBtn.innerHTML = isShowing ? '<i data-lucide="eye"></i> 显示答案' : '<i data-lucide="eye-off"></i> 隐藏答案';
                     if (!isShowing) typesetMath([explanationSpan]);
                     break;
                 case 'toggleFavorite': toggleFavorite(qid, actionBtn); break;
@@ -117,6 +120,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 绑定单一元素静态事件
     document.getElementById('notepad-toggle').addEventListener('click', toggleRightSidebar);
+    document.getElementById('close-notepad').addEventListener('click', toggleRightSidebar);
+    document.getElementById('sidebar-close').addEventListener('click', () => document.body.classList.remove('sidebar-open'));
     
     document.getElementById('test-chapter-wrong-btn').addEventListener('click', startCurrentChapterWrongAnswersTest);
     document.getElementById('clear-chapter-wrong-answers-btn').addEventListener('click', clearCurrentChapterWrongAnswers);
@@ -205,6 +210,12 @@ window.addEventListener('keydown', function(event) {
 
     const quizModal = document.getElementById('quiz-modal');
     const isModalVisible = quizModal && quizModal.style.display === 'block' && window.getComputedStyle(quizModal).display !== 'none';
+
+    if (event.key === '/' && !isModalVisible && !document.querySelector('.modal[style*="display: block"], .modal[style*="display: flex"]')) {
+        event.preventDefault();
+        openSearchModal();
+        return;
+    }
     
     if (isModalVisible) {
         const question = state.quizQuestions[state.currentQuestionIndex];
