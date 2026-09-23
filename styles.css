@@ -1409,41 +1409,34 @@ body.has-wallpaper {
     background-repeat: no-repeat;
 }
 
-body.has-wallpaper #sidebar,
 body.has-wallpaper #right-sidebar {
-    background-color: rgba(255, 255, 255, 0.75);
+    background-color: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border-right-color: rgba(255,255,255,0.3);
-    border-left-color: rgba(255,255,255,0.3);
+    border-color: var(--border);
 }
 
-body.has-wallpaper.dark-mode #sidebar,
 body.has-wallpaper.dark-mode #right-sidebar {
-    background-color: rgba(30, 41, 59, 0.75);
-    border-color: rgba(255,255,255,0.1);
+    background-color: rgba(28, 45, 42, 0.96);
+    border-color: var(--border);
 }
 
 body.has-wallpaper .question-block,
 body.has-wallpaper .modal-content,
 body.has-wallpaper #quiz-container,
-body.has-wallpaper .chapter-button-container,
-body.has-wallpaper #chapter-nav-list details,
 body.has-wallpaper .explanation-span {
-    background-color: rgba(255, 255, 255, 0.85);
+    background-color: rgba(255, 255, 255, 0.94);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.4);
+    border-color: var(--border);
 }
 
 body.has-wallpaper.dark-mode .question-block,
 body.has-wallpaper.dark-mode .modal-content,
 body.has-wallpaper.dark-mode #quiz-container,
-body.has-wallpaper.dark-mode .chapter-button-container,
-body.has-wallpaper.dark-mode #chapter-nav-list details,
 body.has-wallpaper.dark-mode .explanation-span {
-    background-color: rgba(30, 41, 59, 0.85);
-    border-color: rgba(255,255,255,0.1);
+    background-color: rgba(35, 52, 49, 0.94);
+    border-color: var(--border);
 }
 
 body.has-wallpaper #main-title {
@@ -1731,6 +1724,15 @@ input:checked + .slider { background: #d45d43; }
 }
 .main-container { max-width: 1160px; margin: 0 auto; }
 body:not(.home-view) .main-container { max-width: none; }
+body.has-wallpaper .main-container {
+    background: rgba(247, 250, 248, .84);
+    padding: 0 18px 20px;
+    --text-muted: #3d5650;
+}
+body.has-wallpaper.dark-mode .main-container {
+    background: rgba(20, 36, 34, .86);
+    --text-muted: #c2d5cc;
+}
 .workspace-topbar {
     min-height: 64px;
     display: flex;
@@ -1865,7 +1867,6 @@ body.home-view h1#main-title { font-size: 1.7rem; margin-bottom: 19px; }
     grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
     align-items: start;
     gap: 22px;
-    max-width: 1400px;
 }
 .question-index {
     height: calc(100dvh - 40px);
