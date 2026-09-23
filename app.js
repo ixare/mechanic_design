@@ -20,13 +20,13 @@ import {
     openQuestionEditModal,
     openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary,
     updateQuestionEntryChapterField, updateQuestionEntryTypeFields
-} from './js/ui.js?v=20260923-chapter-rail';
+} from './js/ui.js?v=20260923-index-markers';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
     startCurrentChapterWrongAnswersTest, startChapterTest,
     startLastWrongQuizTest, submitQuizAnswer, nextQuizQuestion, closeQuiz,
     openRandomTestSetup
-} from './js/quiz.js?v=20260923';
+} from './js/quiz.js?v=20260923-index-markers';
 import { typesetMath } from './js/utils.js';
 import { loadQuestionEdits } from './js/questionEdits.js';
 import { initIcons } from './js/icons.js?v=20260923';

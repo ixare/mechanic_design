@@ -258,6 +258,7 @@ export function updateChapterNavStatus() {
             wrongBtn.disabled = true;
         }
     });
+    syncQuestionIndexMarkers();
 }
 
 export function updateGlobalControls(show, options = {}) {
@@ -474,6 +475,7 @@ export function renderQuestions(questionsList, options = {}) {
         button.className = 'question-index-item';
         button.dataset.action = 'jumpToQuestion';
         button.dataset.qid = item.qid;
+        button.dataset.number = String(index + 1);
         button.title = title;
         button.setAttribute('aria-label', `第 ${index + 1} 题：${title}`);
         const number = document.createElement('span');
@@ -487,11 +489,16 @@ export function renderQuestions(questionsList, options = {}) {
             label.textContent = title;
         }
         button.append(number, label);
+        const status = document.createElement('span');
+        status.className = 'question-index-status';
+        status.setAttribute('aria-hidden', 'true');
+        button.appendChild(status);
         indexItems.appendChild(button);
     });
 
     workspace.append(indexPanel, questionList);
     contentArea.appendChild(workspace);
+    syncQuestionIndexMarkers();
     scheduleChapterRailSize();
     setQuestionIndexView(questionIndexView);
     updateQuestionIndexCount();
@@ -509,6 +516,20 @@ export function setQuestionIndexView(view) {
     indexItems.dataset.view = view;
     document.querySelectorAll('.question-index-modes button').forEach(button => {
         button.setAttribute('aria-pressed', String(button.dataset.view === view));
+    });
+}
+
+function syncQuestionIndexMarkers() {
+    const favoriteQids = new Set(state.favorites);
+    const wrongQids = new Set(getWrongAnswerQids());
+    document.querySelectorAll('.question-index-item').forEach(button => {
+        const isFavorite = favoriteQids.has(button.dataset.qid);
+        const isWrong = wrongQids.has(button.dataset.qid);
+        const status = button.querySelector('.question-index-status');
+        if (!status) return;
+        status.innerHTML = `${isFavorite ? '<i data-lucide="star" class="question-index-favorite"></i>' : ''}${isWrong ? '<i data-lucide="circle-alert" class="question-index-wrong"></i>' : ''}`;
+        const labels = [isFavorite && '已收藏', isWrong && '错题'].filter(Boolean);
+        button.setAttribute('aria-label', `第 ${button.dataset.number} 题：${button.title}${labels.length ? `（${labels.join('、')}）` : ''}`);
     });
 }
 
@@ -581,9 +602,10 @@ function removeQuestionFromIndex(qid) {
     state.currentQuestionList = state.currentQuestionList.filter(item => item.qid !== qid);
     document.querySelectorAll('.question-index-item').forEach((item, index) => {
         const number = index + 1;
+        item.dataset.number = String(number);
         item.querySelector('.question-index-number').textContent = String(number).padStart(2, '0');
-        item.setAttribute('aria-label', `第 ${number} 题：${item.title}`);
     });
+    syncQuestionIndexMarkers();
     syncQuestionIndexVisibility();
 }
 
@@ -1395,6 +1417,7 @@ export function toggleFavorite(qid, btn) {
         btn.innerHTML = '<i data-lucide="star"></i> 已收藏';
     }
     saveFavorites();
+    syncQuestionIndexMarkers();
 }
 
 export function toggleAllAnswers() {

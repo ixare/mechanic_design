@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
 import { getWrongAnswerQids, recordCorrectPractice, recordWrongAnswer, updateStats } from './storage.js';
-import { updateChapterNavStatus } from './ui.js';
+import { updateChapterNavStatus } from './ui.js?v=20260923-index-markers';
 
 const randomTestState = {
     mode: 'exam',
