@@ -22,8 +22,6 @@ export const state = {
     examTimeRemaining: 0,
     currentQuestionList: [],
     currentRenderOptions: {},
-    currentPage: 1,
-    questionPageSize: 30,
     questionEdits: {},
     questionAdditions: {},
     original_question_lookup: {}

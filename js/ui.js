@@ -24,6 +24,37 @@ import {
 } from './questionEdits.js';
 
 const CUSTOM_CHAPTER_VALUE = '__custom_chapter__';
+let questionIndexView = 'list';
+let questionIndexScrollHandler = null;
+let questionIndexResizeHandler = null;
+let questionIndexFrame = null;
+
+function stopQuestionIndexTracking() {
+    if (questionIndexFrame !== null) {
+        cancelAnimationFrame(questionIndexFrame);
+        questionIndexFrame = null;
+    }
+    if (questionIndexScrollHandler) {
+        window.removeEventListener('scroll', questionIndexScrollHandler);
+        questionIndexScrollHandler = null;
+    }
+    if (questionIndexResizeHandler) {
+        window.removeEventListener('resize', questionIndexResizeHandler);
+        questionIndexResizeHandler = null;
+    }
+}
+
+function sizeQuestionIndex() {
+    const panel = document.querySelector('.question-index');
+    if (!panel) return;
+    if (window.matchMedia('(max-width: 720px)').matches) {
+        panel.style.height = '';
+        return;
+    }
+    const top = Math.max(20, panel.getBoundingClientRect().top);
+    const height = `${Math.max(280, window.innerHeight - top - 20)}px`;
+    if (panel.style.height !== height) panel.style.height = height;
+}
 
 function getChapterOrder(chapterName) {
     const match = chapterName.match(/第(\S+)章/);
@@ -353,6 +384,7 @@ function renderWelcomeOverview() {
 }
 
 export function showHome() {
+    stopQuestionIndexTracking();
     state.activeChapter = null;
     state.activeType = null;
     if (state.activeChapterButton) {
@@ -378,63 +410,163 @@ export function showHome() {
 
 export function renderQuestions(questionsList, options = {}) {
     const contentArea = document.getElementById('content-area');
+    stopQuestionIndexTracking();
     contentArea.innerHTML = '';
     state.currentQuestionList = questionsList;
     state.currentRenderOptions = { ...options };
-    state.currentPage = options.page || 1;
+    if (!questionsList.length) return [];
 
-    const totalPages = Math.max(1, Math.ceil(questionsList.length / state.questionPageSize));
-    if (state.currentPage > totalPages) state.currentPage = totalPages;
+    const workspace = document.createElement('div');
+    workspace.className = 'question-workspace';
+    const indexPanel = document.createElement('aside');
+    indexPanel.className = 'question-index';
+    indexPanel.setAttribute('aria-label', '题目索引');
+    indexPanel.innerHTML = `
+        <div class="question-index-header">
+            <div class="question-index-heading"><strong>题目索引</strong><span class="question-index-count"></span></div>
+            <div class="question-index-modes" role="group" aria-label="索引视图">
+                <button type="button" data-action="setQuestionIndexView" data-view="list" aria-label="列表视图" title="列表视图"><i data-lucide="list"></i></button>
+                <button type="button" data-action="setQuestionIndexView" data-view="grid" aria-label="网格视图" title="网格视图"><i data-lucide="layout-grid"></i></button>
+            </div>
+        </div>
+        <nav class="question-index-items" aria-label="跳转到题目"></nav>
+    `;
+    const indexItems = indexPanel.querySelector('.question-index-items');
+    const questionList = document.createElement('div');
+    questionList.className = 'question-list';
+    const visibleBlocks = [];
 
-    const start = (state.currentPage - 1) * state.questionPageSize;
-    const pageQuestions = questionsList.slice(start, start + state.questionPageSize);
-    let visibleBlocks = [];
-    renderPagination(contentArea, questionsList.length, totalPages, options);
-    pageQuestions.forEach(item => {
+    questionsList.forEach((item, index) => {
         const block = createQuestionBlock(item, options);
         block.classList.add('visible');
-        contentArea.appendChild(block);
+        block.id = `question-${index + 1}`;
+        questionList.appendChild(block);
         visibleBlocks.push(block);
+
+        const title = block.querySelector('p')?.textContent.replace(/^\s*\d+\s*[、.．]\s*/, '').replace(/\s+/g, ' ').trim() || `第 ${index + 1} 题`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'question-index-item';
+        button.dataset.action = 'jumpToQuestion';
+        button.dataset.qid = item.qid;
+        button.title = title;
+        button.setAttribute('aria-label', `第 ${index + 1} 题：${title}`);
+        const number = document.createElement('span');
+        number.className = 'question-index-number';
+        number.textContent = String(index + 1).padStart(2, '0');
+        const label = document.createElement('span');
+        label.className = 'question-index-label';
+        if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            label.innerHTML = DOMPurify.sanitize(marked.parseInline(title));
+        } else {
+            label.textContent = title;
+        }
+        button.append(number, label);
+        indexItems.appendChild(button);
     });
+
+    workspace.append(indexPanel, questionList);
+    contentArea.appendChild(workspace);
+    setQuestionIndexView(questionIndexView);
+    updateQuestionIndexCount();
+    if (questionsList.length) setActiveQuestionIndex(questionsList[0].qid);
+    trackQuestionBlocks(visibleBlocks);
+    typesetMath([questionList, indexItems]);
     return visibleBlocks;
 }
 
-function renderPagination(contentArea, total, totalPages, options) {
-    const pagination = document.createElement('div');
-    pagination.className = 'pagination-controls';
-    pagination.innerHTML = `
-        <button class="action-button pagination-button" data-action="changePage" data-page="${state.currentPage - 1}" ${state.currentPage === 1 ? 'disabled' : ''}>
-            <i data-lucide="chevron-left"></i> 上一页
-        </button>
-        <span class="pagination-status">第 ${state.currentPage} / ${totalPages} 页，共 ${total} 题</span>
-        <button class="action-button pagination-button" data-action="changePage" data-page="${state.currentPage + 1}" ${state.currentPage === totalPages ? 'disabled' : ''}>
-            下一页 <i data-lucide="chevron-right"></i>
-        </button>
-        <button class="action-button pagination-top-button" data-action="scrollToQuestionTop" title="回到题目顶部" aria-label="回到题目顶部">
-            <i data-lucide="arrow-up"></i> 回顶
-        </button>
-    `;
-    pagination.dataset.renderMode = options.mode || 'list';
-    contentArea.appendChild(pagination);
-}
-
-export function scrollToQuestionTop() {
-    const mainTitle = document.getElementById('main-title');
-    const target = mainTitle || document.getElementById('content-area');
-    if (!target) return;
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-export function changePage(page) {
-    const nextPage = Number(page);
-    if (!Number.isFinite(nextPage) || nextPage < 1) return;
-    const visibleBlocks = renderQuestions(state.currentQuestionList, { ...state.currentRenderOptions, page: nextPage });
-    visibleBlocks.forEach(block => {
-        const removeBtn = block.querySelector('.remove-wrong-answer-btn');
-        if (removeBtn) removeBtn.style.display = state.currentRenderOptions.mode === 'wrong' ? 'inline-block' : 'none';
+export function setQuestionIndexView(view) {
+    if (view !== 'list' && view !== 'grid') return;
+    questionIndexView = view;
+    const indexItems = document.querySelector('.question-index-items');
+    if (!indexItems) return;
+    indexItems.dataset.view = view;
+    document.querySelectorAll('.question-index-modes button').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.view === view));
     });
-    typesetMath(visibleBlocks);
-    document.getElementById('content-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setActiveQuestionIndex(qid) {
+    document.querySelectorAll('.question-index-item').forEach(button => {
+        const active = button.dataset.qid === qid;
+        button.classList.toggle('active', active);
+        if (active) button.setAttribute('aria-current', 'location');
+        else button.removeAttribute('aria-current');
+    });
+}
+
+function updateQuestionIndexCount() {
+    const count = document.querySelector('.question-index-count');
+    if (!count) return;
+    const items = Array.from(document.querySelectorAll('.question-index-item'));
+    const visible = items.filter(item => !item.hidden).length;
+    count.textContent = visible === items.length ? `${visible} 题` : `${visible} / ${items.length} 题`;
+}
+
+function trackQuestionBlocks(blocks) {
+    stopQuestionIndexTracking();
+    const visible = blocks.filter(block => getComputedStyle(block).display !== 'none');
+    if (!visible.length) return;
+
+    const updateActive = () => {
+        questionIndexFrame = null;
+        sizeQuestionIndex();
+        let current = visible[0];
+        if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) {
+            current = visible[visible.length - 1];
+        } else {
+            const activationLine = Math.min(160, window.innerHeight * 0.25);
+            for (const block of visible) {
+                if (block.getBoundingClientRect().top > activationLine) break;
+                current = block;
+            }
+        }
+        setActiveQuestionIndex(current.dataset.qid);
+    };
+    questionIndexScrollHandler = () => {
+        if (questionIndexFrame !== null) return;
+        questionIndexFrame = requestAnimationFrame(updateActive);
+    };
+    window.addEventListener('scroll', questionIndexScrollHandler, { passive: true });
+    questionIndexResizeHandler = sizeQuestionIndex;
+    window.addEventListener('resize', questionIndexResizeHandler);
+    updateActive();
+}
+
+function syncQuestionIndexVisibility() {
+    const blocks = Array.from(document.querySelectorAll('.question-list .question-block'));
+    const blocksById = new Map(blocks.map(block => [block.dataset.qid, block]));
+    document.querySelectorAll('.question-index-item').forEach(button => {
+        const block = blocksById.get(button.dataset.qid);
+        button.hidden = !block || getComputedStyle(block).display === 'none';
+    });
+    updateQuestionIndexCount();
+    trackQuestionBlocks(blocks);
+    const active = document.querySelector('.question-index-item.active:not([hidden])');
+    if (!active) {
+        const first = document.querySelector('.question-index-item:not([hidden])');
+        setActiveQuestionIndex(first?.dataset.qid);
+    }
+}
+
+function removeQuestionFromIndex(qid) {
+    const button = Array.from(document.querySelectorAll('.question-index-item')).find(item => item.dataset.qid === qid);
+    button?.remove();
+    state.currentQuestionList = state.currentQuestionList.filter(item => item.qid !== qid);
+    document.querySelectorAll('.question-index-item').forEach((item, index) => {
+        const number = index + 1;
+        item.querySelector('.question-index-number').textContent = String(number).padStart(2, '0');
+        item.setAttribute('aria-label', `第 ${number} 题：${item.title}`);
+    });
+    syncQuestionIndexVisibility();
+}
+
+export function jumpToQuestion(qid) {
+    const block = Array.from(document.querySelectorAll('.question-list .question-block'))
+        .find(item => item.dataset.qid === qid && getComputedStyle(item).display !== 'none');
+    if (!block) return;
+    setActiveQuestionIndex(qid);
+    block.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 export function createQuestionBlock(item, options = {}) {
@@ -503,7 +635,6 @@ function refreshRenderedQuestions() {
             removeBtn.style.display = state.currentRenderOptions.mode === 'wrong' ? 'inline-block' : 'none';
         }
     });
-    typesetMath(visibleBlocks);
     updateQuestionEditSummary();
 }
 
@@ -825,7 +956,6 @@ export function showQuestions(chapter, type, btn) {
         const removeBtn = block.querySelector('.remove-wrong-answer-btn');
         if (removeBtn) removeBtn.style.display = 'none';
     });
-    typesetMath(visibleBlocks);
 }
 
 export function showChapterWrongAnswers(chapterName, btn) {
@@ -852,8 +982,6 @@ export function showChapterWrongAnswers(chapterName, btn) {
         const removeBtn = block.querySelector('.remove-wrong-answer-btn');
         if (removeBtn) removeBtn.style.display = 'inline-block';
     });
-    typesetMath(visibleBlocks);
-
     if (questionsList.length === 0) {
         updateGlobalControls(false);
         document.getElementById('content-area').innerHTML = '';
@@ -884,8 +1012,6 @@ export function showAllWrongAnswers() {
         const removeBtn = block.querySelector('.remove-wrong-answer-btn');
         if (removeBtn) removeBtn.style.display = 'inline-block';
     });
-    typesetMath(visibleBlocks);
-
     if (questionsList.length === 0) {
         updateGlobalControls(false);
         document.getElementById('content-area').innerHTML = '';
@@ -915,8 +1041,6 @@ export function showAllFavorites() {
         const removeBtn = block.querySelector('.remove-wrong-answer-btn');
         if (removeBtn) removeBtn.style.display = 'none';
     });
-    typesetMath(visibleBlocks);
-
     if (favQuestions.length === 0) {
         updateGlobalControls(false);
         document.getElementById('content-area').innerHTML = '';
@@ -980,8 +1104,6 @@ export function filterQuestions(query) {
         document.getElementById('welcome-message').innerHTML = searchTerm.length > 0
             ? `<p>未找到包含 "${query}" 的题目。</p>`
             : '<p>未找到符合当前筛选条件的题目。</p>';
-    } else {
-         typesetMath(visibleBlocks);
     }
 }
 
@@ -1207,6 +1329,7 @@ export function removeSingleWrongAnswer(qid, chapter, btn) {
         
         const block = btn.closest('.question-block');
         if (block) block.remove();
+        removeQuestionFromIndex(qid);
         
         updateChapterNavStatus();
 
@@ -1231,9 +1354,14 @@ export function toggleFavorite(qid, btn) {
         if (state.activeChapter === null && state.activeType === null && document.getElementById('main-title').textContent === '我的收藏') {
             const block = btn.closest('.question-block');
             if (block) block.remove();
+            removeQuestionFromIndex(qid);
             if (state.favorites.length === 0) {
                  showAllFavorites();
             }
+        } else if (document.getElementById('toggle-favorites-btn').dataset.state === 'favorites') {
+            const block = btn.closest('.question-block');
+            if (block) block.style.display = 'none';
+            syncQuestionIndexVisibility();
         }
     } else {
         state.favorites.push(qid);
@@ -1285,4 +1413,5 @@ export function toggleFavoritesView() {
 
     btn.textContent = showingOnlyFavorites ? '只显示收藏' : '显示全部题目';
     btn.dataset.state = showingOnlyFavorites ? 'all' : 'favorites';
+    syncQuestionIndexVisibility();
 }

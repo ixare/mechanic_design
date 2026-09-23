@@ -11,7 +11,7 @@ import {
     handleWallpaperUpload, confirmCrop, closeCropper,
     removeSingleWrongAnswer, toggleFavorite, toggleAllAnswers, toggleFavoritesView, clearCurrentChapterWrongAnswers,
     showQuestions, showChapterWrongAnswers, showAllFavorites, filterQuestions,
-    showAllWrongAnswers, clearAllWrongAnswers, changePage, scrollToQuestionTop,
+    showAllWrongAnswers, clearAllWrongAnswers, jumpToQuestion, setQuestionIndexView,
     openSearchModal, closeSearchModal,
     closeQuestionEntryModal,
     closeQuestionEditManager, closeQuestionEditModal, copyQuestionSyncRequest,
@@ -20,7 +20,7 @@ import {
     openQuestionEditModal,
     openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary,
     updateQuestionEntryChapterField, updateQuestionEntryTypeFields
-} from './js/ui.js?v=20260923';
+} from './js/ui.js?v=20260923-index-2';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
     startCurrentChapterWrongAnswersTest, startChapterTest,
@@ -93,8 +93,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 case 'showChapterWrongAnswers': showChapterWrongAnswers(chapter, actionBtn); break;
                 case 'showQuestions': showQuestions(chapter, actionBtn.dataset.type, actionBtn); break;
                 case 'startChapterTest': startChapterTest(chapter); break;
-                case 'changePage': changePage(actionBtn.dataset.page); break;
-                case 'scrollToQuestionTop': scrollToQuestionTop(); break;
+                case 'jumpToQuestion': jumpToQuestion(actionBtn.dataset.qid); break;
+                case 'setQuestionIndexView': setQuestionIndexView(actionBtn.dataset.view); break;
                 
                 case 'toggleAnswer': 
                     const answerSpan = actionBtn.nextElementSibling;
