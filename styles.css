@@ -418,13 +418,20 @@ input:checked + .slider::before {
    -------------------------------------------------------------------------- */
 #main-content {
     margin-left: 254px;
-    padding: 0 40px 90px;
+    padding: 0 36px 90px;
     min-height: 100vh;
     transition: margin-left 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .main-container {
-    max-width: 1200px;
+    max-width: 1400px;
+    margin: 0 auto;
+    transition: max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 做题与自测工作台模式：自适应充分伸展，彻底消除宽屏下两边过度空旷的问题 */
+body:not(.home-view) .main-container {
+    max-width: min(1760px, 100%);
     margin: 0 auto;
 }
 
