@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
-import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260924-awwwards-redesign';
+import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260924-fix-v2';
 import {
     getWrongAnswerEntries,
     getWrongAnswerQids,
@@ -656,6 +656,7 @@ export function createQuestionBlock(item, options = {}) {
         ? '<span class="local-add-badge"><i data-lucide="plus"></i> 本地新增</span>'
         : (hasLocalEdit ? '<span class="local-edit-badge"><i data-lucide="pen"></i> 本地修订</span>' : '');
     const editAction = hasLocalAddition ? 'openQuestionEntryEditor' : 'openQuestionEditor';
+    const editLabel = hasLocalAddition ? '编辑录入' : '编辑';
     const typeLabel = item.type === 'mcq' ? 'MCQ // 选择题' : 'TF // 判断题';
     const optionsHtml = item.type === 'mcq' ? `
         <ul class="question-options-list">

@@ -1404,7 +1404,7 @@ body.home-view .chapter-rail {
     overflow-y: auto;
 }
 
-.close-modal, #close-quiz, #close-notepad, #sidebar-close {
+.close-modal, #close-quiz, #close-notepad {
     width: 34px;
     height: 34px;
     display: grid;
@@ -1420,6 +1420,18 @@ body.home-view .chapter-rail {
     background: var(--surface-300);
     border-color: var(--text-main);
     color: var(--text-main);
+}
+#sidebar-close {
+    display: none;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-xs);
+    color: #d1e2dc;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 .close-modal {
     position: absolute;
