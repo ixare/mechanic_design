@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
-import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260923';
+import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260924-awwwards-redesign';
 import {
     getWrongAnswerEntries,
     getWrongAnswerQids,
@@ -375,9 +375,9 @@ function renderWelcomeOverview() {
                 </div>
             </div>
             <div class="mechanism-visual">
-                <canvas id="mechanism-canvas" role="img" aria-label="可拖动的啮合齿轮示意图"></canvas>
-                <span class="mechanism-label mechanism-label-top">齿轮传动 / 24 : 16</span>
-                <span class="mechanism-label mechanism-label-bottom">输入轴 / 输出轴</span>
+                <canvas id="mechanism-canvas" role="img" aria-label="可拖动的啮合行星齿轮示意图"></canvas>
+                <span class="mechanism-label mechanism-label-top">行星轮系机构 / 18 : 15 : 48</span>
+                <span class="mechanism-label mechanism-label-bottom">太阳轮 · 行星轮 · 内齿圈</span>
             </div>
         </section>
         <section class="chapter-index" aria-labelledby="chapter-index-title">
@@ -656,16 +656,33 @@ export function createQuestionBlock(item, options = {}) {
         ? '<span class="local-add-badge"><i data-lucide="plus"></i> 本地新增</span>'
         : (hasLocalEdit ? '<span class="local-edit-badge"><i data-lucide="pen"></i> 本地修订</span>' : '');
     const editAction = hasLocalAddition ? 'openQuestionEntryEditor' : 'openQuestionEditor';
-    const editLabel = hasLocalAddition ? '编辑录入' : '编辑';
+    const typeLabel = item.type === 'mcq' ? 'MCQ // 选择题' : 'TF // 判断题';
+    const optionsHtml = item.type === 'mcq' ? `
+        <ul class="question-options-list">
+            ${item.options.map(o => {
+                const formatted = formatInlineHtml(o, searchTerms);
+                const match = formatted.match(/^([A-Za-z][\.\、\s]*)(.*)$/);
+                if (match) {
+                    return `<li><span class="opt-key">${match[1].replace(/[\.\、\s]+$/, '')}</span><span class="opt-val">${match[2]}</span></li>`;
+                }
+                return `<li>${formatted}</li>`;
+            }).join('')}
+        </ul>
+    ` : '';
+
     block.innerHTML = `
-        <p>${questionHtml}</p>
+        <div class="question-header-meta">
+            <span class="question-type-badge">${typeLabel}</span>
+            <span class="question-id-badge">ID: ${escapeAttribute(item.qid)}</span>
+        </div>
+        <p class="question-stem">${questionHtml}</p>
         ${editBadgeHtml}
         ${wrongMetaHtml}
-        ${item.type === 'mcq' ? `<ul>${item.options.map(o => `<li>${formatInlineHtml(o, searchTerms)}</li>`).join('')}</ul>` : ''}
+        ${optionsHtml}
         <div class="action-buttons-container">
             <button class="action-button" data-action="toggleAnswer" data-state="hidden"><i data-lucide="eye"></i> 显示答案</button>
-            <span class="answer-span">答案: ${item.answer}</span>
-            <div class="explanation-span">${explanationHtml ? `<b>解析：</b>${explanationHtml}` : ''}</div>
+            <span class="answer-span"><strong class="answer-badge">标准答案</strong> ${item.answer}</span>
+            <div class="explanation-span">${explanationHtml ? `<div class="explanation-title"><i data-lucide="book-marked"></i> 工程解析与校核</div><div class="explanation-body">${explanationHtml}</div>` : ''}</div>
             <button class="action-button favorite-button ${isFav ? 'favorited' : ''}" data-qid="${item.qid}" data-action="toggleFavorite">${isFav ? '<i data-lucide="star"></i> 已收藏' : '<i data-lucide="star"></i> 收藏'}</button>
             <button class="action-button edit-question-button" data-qid="${item.qid}" data-action="${editAction}"><i data-lucide="square-pen"></i> ${editLabel}</button>
             <button class="action-button remove-wrong-answer-btn" data-qid="${item.qid}" data-chapter="${item.chapter}" data-action="removeWrongAnswer"><i data-lucide="trash-2"></i> 移除此题</button>

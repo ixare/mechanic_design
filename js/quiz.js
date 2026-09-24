@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
 import { getWrongAnswerQids, recordCorrectPractice, recordWrongAnswer, updateStats } from './storage.js';
-import { updateChapterNavStatus } from './ui.js?v=20260923-index-markers';
+import { updateChapterNavStatus } from './ui.js?v=20260924-awwwards-redesign';
 
 const randomTestState = {
     mode: 'exam',
@@ -355,21 +355,35 @@ export function displayQuizQuestion() {
         if (question.type === 'mcq') {
             question.options.forEach(option => {
                 const label = document.createElement('label');
-                const radio = Object.assign(document.createElement('input'), { type: 'radio', name: 'quizOption', value: option.charAt(0) });
-                label.appendChild(radio);
-                label.appendChild(document.createTextNode(option));
+                label.className = 'quiz-option-item';
+                const key = option.charAt(0);
+                const text = option.replace(/^[A-Za-z][\.\、\s]*/, '');
+                const radio = Object.assign(document.createElement('input'), { type: 'radio', name: 'quizOption', value: key });
+                label.innerHTML = `
+                    <span class="quiz-option-key">${key}</span>
+                    <span class="quiz-option-text">${text}</span>
+                `;
+                label.prepend(radio);
                 optionsContainer.appendChild(label);
             });
         } else {
             const labelTrue = document.createElement('label');
+            labelTrue.className = 'quiz-option-item quiz-option-tf';
             const radioTrue = Object.assign(document.createElement('input'), { type: 'radio', name: 'quizOption', value: '✓' });
-            labelTrue.appendChild(radioTrue);
-            labelTrue.appendChild(document.createTextNode('✓ 正确'));
+            labelTrue.innerHTML = `
+                <span class="quiz-option-key"><i data-lucide="check"></i></span>
+                <span class="quiz-option-text">正确</span>
+            `;
+            labelTrue.prepend(radioTrue);
 
             const labelFalse = document.createElement('label');
+            labelFalse.className = 'quiz-option-item quiz-option-tf';
             const radioFalse = Object.assign(document.createElement('input'), { type: 'radio', name: 'quizOption', value: '×' });
-            labelFalse.appendChild(radioFalse);
-            labelFalse.appendChild(document.createTextNode('× 错误'));
+            labelFalse.innerHTML = `
+                <span class="quiz-option-key"><i data-lucide="x"></i></span>
+                <span class="quiz-option-text">错误</span>
+            `;
+            labelFalse.prepend(radioFalse);
 
             optionsContainer.appendChild(labelTrue);
             optionsContainer.appendChild(labelFalse);
@@ -503,14 +517,34 @@ export function showQuizResults() {
         ? '<button class="quiz-button" data-action="startLastWrongQuizTest"><i data-lucide="rotate-cw"></i> 重练本次错题</button>'
         : '';
 
+    const accuracyPct = Math.round((state.score / state.quizLength) * 100);
+    const gradeLevel = accuracyPct >= 90 ? 'EXCELLENT // 掌握熟练' : (accuracyPct >= 60 ? 'STANDARD // 达到标准' : 'CRITICAL // 建议巩固');
+
     scoreEl.innerHTML = `
-        <h3>测试结束！</h3>
-        <p>你的得分: <span style="color:var(--primary-color);font-size:1.5em;">${state.score}</span> / ${state.quizLength}</p>
-        <p>正确率: ${Math.round((state.score / state.quizLength) * 100)}%</p>
-        <p>本次错题: ${state.lastWrongQuizQuestions.length} 道</p>
+        <div class="quiz-result-hero">
+            <div class="quiz-result-tag"><i data-lucide="activity"></i> 测验诊断报告 · ${gradeLevel}</div>
+            <h3 class="quiz-result-headline">诊断评估完成</h3>
+        </div>
+        <div class="quiz-score-hud">
+            <div class="quiz-hud-card">
+                <span class="hud-label">得分 / 总量</span>
+                <strong class="hud-value hud-score">${state.score} <span>/ ${state.quizLength}</span></strong>
+            </div>
+            <div class="quiz-hud-card">
+                <span class="hud-label">正确率</span>
+                <strong class="hud-value hud-rate">${accuracyPct}%</strong>
+            </div>
+            <div class="quiz-hud-card">
+                <span class="hud-label">本次错题</span>
+                <strong class="hud-value hud-wrong">${state.lastWrongQuizQuestions.length} <span>题</span></strong>
+            </div>
+        </div>
         <div class="quiz-result-actions">
             ${wrongRetryButton}
-            <button class="quiz-button" data-action="closeQuiz" style="background-color:var(--secondary-color);">关闭</button>
+            <button class="quiz-button quiz-button-close" data-action="closeQuiz"><i data-lucide="check"></i> 退出测验</button>
+        </div>
+        <div class="quiz-review-heading">
+            <h4><i data-lucide="file-text"></i> 答题明细与工程解析校核</h4>
         </div>
         <div class="quiz-review-list">${reviewItems}</div>
     `;
