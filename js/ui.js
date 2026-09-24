@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
-import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260924-fix-v2';
+import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260924-fix-v3';
 import {
     getWrongAnswerEntries,
     getWrongAnswerQids,
@@ -376,8 +376,6 @@ function renderWelcomeOverview() {
             </div>
             <div class="mechanism-visual">
                 <canvas id="mechanism-canvas" role="img" aria-label="可拖动的啮合行星齿轮示意图"></canvas>
-                <span class="mechanism-label mechanism-label-top">行星轮系机构 / 18 : 15 : 48</span>
-                <span class="mechanism-label mechanism-label-bottom">太阳轮 · 行星轮 · 内齿圈</span>
             </div>
         </section>
         <section class="chapter-index" aria-labelledby="chapter-index-title">

@@ -290,17 +290,26 @@ export function initMechanismCanvas() {
 
         // 8. 实时动力学遥测 HUD 数据覆盖 (Telemetry Overlay)
         ctx.save();
-        ctx.font = '600 10px "JetBrains Mono", "Barlow Condensed", monospace';
-        ctx.fillStyle = isDark ? '#7ab8af' : '#2b5f58';
+        ctx.font = '600 11px "JetBrains Mono", "Barlow Condensed", monospace';
+        ctx.fillStyle = isDark ? 'rgba(122, 184, 175, 0.85)' : 'rgba(43, 95, 88, 0.85)';
         
-        // 模数与齿数参数
-        ctx.fillText(`EPICYCLIC TRAIN: z1=${sunTeeth} | z2=${planetTeeth} | z3=${ringTeeth}`, 24, height - 36);
-        ctx.fillText(`RATIO i_1H = ${(1 + ringTeeth / sunTeeth).toFixed(2)}  ·  ENGAGED`, 24, height - 22);
+        // 顶部机构技术参数
+        ctx.fillText(`EPICYCLIC TRAIN // 周转行星轮系机构`, 20, 26);
+        ctx.font = '500 10px "JetBrains Mono", monospace';
+        ctx.fillStyle = isDark ? 'rgba(122, 184, 175, 0.6)' : 'rgba(43, 95, 88, 0.6)';
+        ctx.fillText(`z1: ${sunTeeth} (太阳轮) · z2: ${planetTeeth} (行星轮) · z3: ${ringTeeth} (内齿圈)`, 20, 42);
 
-        // 实时转速指示
+        // 底部传动参数
+        ctx.font = '600 11px "JetBrains Mono", monospace';
+        ctx.fillStyle = isDark ? 'rgba(122, 184, 175, 0.85)' : 'rgba(43, 95, 88, 0.85)';
+        ctx.fillText(`TRANSMISSION RATIO i = ${(1 + ringTeeth / sunTeeth).toFixed(2)} · ENGAGED`, 20, height - 20);
+
+        // 底部右侧转速指示
         const rpm = Math.abs(velocity * 60 * 10).toFixed(1);
         ctx.fillStyle = accentOrange;
-        ctx.fillText(`ω_in: ${(velocity * 50).toFixed(2)} rad/s  [${rpm} RPM]`, width - 180, height - 22);
+        ctx.textAlign = 'right';
+        ctx.fillText(`SPEED: ${(velocity * 50).toFixed(2)} rad/s  [${rpm} RPM]`, width - 20, height - 20);
+        ctx.textAlign = 'left';
 
         // 鼠标定位探针光效
         if (hoverActive && mousePos.x > 0 && mousePos.y > 0) {
