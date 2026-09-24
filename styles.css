@@ -257,10 +257,10 @@ svg.lucide {
     height: 38px;
     display: grid;
     place-items: center;
-    background: var(--accent-orange);
+    background: linear-gradient(135deg, #0284c7, #0369a1);
     color: #ffffff;
     border-radius: var(--radius-xs);
-    box-shadow: 0 4px 12px var(--accent-orange-glow);
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.32);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .sidebar-header:hover .brand-mark {

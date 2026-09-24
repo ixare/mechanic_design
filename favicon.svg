@@ -1,13 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- 专为 16x16 / 32x32 小尺寸高辨识度打造的先锋大模数机械齿轮 Favicon -->
+  <!-- 专为 16x16 / 32x32 小尺寸优化的高辨识度先锋蓝钢机械齿轮 Favicon (无橙色) -->
   <defs>
+    <linearGradient id="gear-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
     <filter id="gear-shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.35" />
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1" flood-color="#000000" flood-opacity="0.3" />
     </filter>
   </defs>
 
-  <!-- 齿轮主体路径：6 齿大模数重型工业齿轮，轮廓饱满，负空间通透 -->
-  <path fill="#ff471a" stroke="#d4320b" stroke-width="1.5" stroke-linejoin="round" filter="url(#gear-shadow)" d="
+  <!-- 齿轮主体路径：6 齿大模数重型机械齿轮，先锋钛青钴蓝配色 -->
+  <path fill="url(#gear-blue)" stroke="#0284c7" stroke-width="1.2" stroke-linejoin="round" filter="url(#gear-shadow)" d="
     M 36,4 L 28,4 L 27.5,14.2 
     L 20.3,10.0 L 14.3,17.0 L 21.2,23.3 
     L 16.5,29.0 L 6.5,29.0 L 6.5,39.0 L 16.5,39.0 
@@ -18,10 +22,10 @@
     L 42.8,23.3 L 49.7,17.0 L 43.7,10.0 L 36.5,14.2 Z
   " />
 
-  <!-- 内部中心大轴孔与平键槽（大对比度负空间，极小尺寸下依然一眼可见） -->
-  <circle cx="32" cy="34" r="11" fill="#0c1718" stroke="#ffffff" stroke-width="2" />
-  <rect x="30" y="21" width="4" height="6" fill="#0c1718" />
+  <!-- 内部中心大轴孔与平键槽（大对比度负空间，极小尺寸下依然一眼分明） -->
+  <circle cx="32" cy="34" r="11.5" fill="#081014" stroke="#ffffff" stroke-width="2" />
+  <rect x="30" y="21" width="4" height="6" fill="#081014" />
   
-  <!-- 中心轴心高亮指示点 -->
-  <circle cx="32" cy="34" r="4.5" fill="#00f0b5" />
+  <!-- 中心轴心高亮指示点：电光冰蓝冷色 -->
+  <circle cx="32" cy="34" r="4.5" fill="#38bdf8" />
 </svg>
