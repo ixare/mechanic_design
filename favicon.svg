@@ -1,31 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- 专为 16x16 / 32x32 小尺寸优化的高辨识度先锋蓝钢机械齿轮 Favicon (无橙色) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- 机械设计基础 - 侧边栏同款先锋品牌标志 Favicon (Lucide Cog 蓝底精密齿轮) -->
   <defs>
-    <linearGradient id="gear-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0284c7" />
       <stop offset="100%" stop-color="#0369a1" />
     </linearGradient>
-    <filter id="gear-shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="1.5" stdDeviation="1" flood-color="#000000" flood-opacity="0.3" />
+    <filter id="subtle-glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.2" />
     </filter>
   </defs>
 
-  <!-- 齿轮主体路径：6 齿大模数重型机械齿轮，先锋钛青钴蓝配色 -->
-  <path fill="url(#gear-blue)" stroke="#0284c7" stroke-width="1.2" stroke-linejoin="round" filter="url(#gear-shadow)" d="
-    M 36,4 L 28,4 L 27.5,14.2 
-    L 20.3,10.0 L 14.3,17.0 L 21.2,23.3 
-    L 16.5,29.0 L 6.5,29.0 L 6.5,39.0 L 16.5,39.0 
-    L 21.2,44.7 L 14.3,51.0 L 20.3,58.0 L 27.5,53.8 
-    L 28,64 L 36,64 L 36.5,53.8 
-    L 43.7,58.0 L 49.7,51.0 L 42.8,44.7 
-    L 47.5,39.0 L 57.5,39.0 L 57.5,29.0 L 47.5,29.0 
-    L 42.8,23.3 L 49.7,17.0 L 43.7,10.0 L 36.5,14.2 Z
-  " />
+  <!-- 蓝底品牌圆角矩形背景 (与侧边栏 brand-mark 100% 保持一致) -->
+  <rect width="64" height="64" rx="14" fill="url(#brand-gradient)" filter="url(#subtle-glow)" />
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25" fill="none" stroke="rgba(255, 255, 255, 0.22)" stroke-width="1.5" />
 
-  <!-- 内部中心大轴孔与平键槽（大对比度负空间，极小尺寸下依然一眼分明） -->
-  <circle cx="32" cy="34" r="11.5" fill="#081014" stroke="#ffffff" stroke-width="2" />
-  <rect x="30" y="21" width="4" height="6" fill="#081014" />
-  
-  <!-- 中心轴心高亮指示点：电光冰蓝冷色 -->
-  <circle cx="32" cy="34" r="4.5" fill="#38bdf8" />
+  <!-- 居中精细 Lucide Cog 矢量图标结构 (白色线条，小尺寸高辨识度) -->
+  <g transform="translate(8, 8) scale(2)" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 10.27 7 3.34" />
+    <path d="m11 13.73-4 6.93" />
+    <path d="M12 22v-2" />
+    <path d="M12 2v2" />
+    <path d="M14 12h8" />
+    <path d="m17 20.66-1-1.73" />
+    <path d="m17 3.34-1 1.73" />
+    <path d="M2 12h2" />
+    <path d="m20.66 17-1.73-1" />
+    <path d="m20.66 7-1.73 1" />
+    <path d="m3.34 17 1.73-1" />
+    <path d="m3.34 7 1.73 1" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="12" cy="12" r="8" />
+  </g>
 </svg>
