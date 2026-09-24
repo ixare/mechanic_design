@@ -888,32 +888,34 @@ body.home-view .chapter-rail {
     display: none;
 }
 
-/* 章节侧轨 (Chapter Rail) */
+/* 章节侧轨目录栏 (Chapter Rail) */
 .chapter-rail {
     position: sticky;
     top: 20px;
     height: calc(100dvh - 40px);
     display: flex;
     flex-direction: column;
-    background: #111e1f;
-    border: 1px solid rgba(135, 185, 175, 0.18);
+    background: var(--surface-card);
+    border: 1px solid var(--border);
     border-radius: var(--radius-xs);
-    color: #dbeae4;
+    color: var(--text-main);
     overflow: hidden;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm);
+    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .chapter-rail-header {
-    padding: 16px 14px;
-    border-bottom: 1px solid rgba(220, 240, 233, 0.14);
+    padding: 14px 14px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-200);
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 .chapter-rail-header h2 {
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--text-main);
     display: flex;
     align-items: center;
     gap: 7px;
@@ -934,7 +936,7 @@ body.home-view .chapter-rail {
 }
 
 #chapter-nav-list details {
-    border-bottom: 1px solid rgba(220, 240, 233, 0.1);
+    border-bottom: 1px solid var(--border);
 }
 #chapter-nav-list summary {
     display: flex;
@@ -942,26 +944,26 @@ body.home-view .chapter-rail {
     justify-content: space-between;
     gap: 8px;
     padding: 10px 10px;
-    color: #d1e2dc;
+    color: var(--text-main);
     font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
     user-select: none;
     list-style: none;
-    transition: background-color 0.2s;
+    transition: all 0.15s;
 }
 #chapter-nav-list summary::-webkit-details-marker {
     display: none;
 }
 #chapter-nav-list summary:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: #ffffff;
+    background: var(--surface-200);
+    color: var(--primary);
 }
 
 .chapter-chevron {
     width: 14px !important;
     height: 14px !important;
-    color: #799d93;
+    color: var(--text-light);
     transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 #chapter-nav-list details[open] .chapter-chevron {
@@ -970,19 +972,20 @@ body.home-view .chapter-rail {
 }
 
 .chapter-button-container {
-    padding: 4px 6px 10px;
-    background: #182c2a;
+    padding: 6px 8px 10px;
+    background: var(--surface-200);
+    border-top: 1px solid var(--border);
     display: grid;
-    gap: 3px;
+    gap: 4px;
 }
 .chapter-type-button, .chapter-test-button, .chapter-wrong-button {
     width: 100%;
     min-height: 32px;
     padding: 6px 10px;
-    background: transparent;
-    border: 1px solid transparent;
+    background: var(--surface-100);
+    border: 1px solid var(--border);
     border-radius: var(--radius-xs);
-    color: #c7ded5;
+    color: var(--text-main);
     font-size: 0.8rem;
     font-weight: 500;
     display: flex;
@@ -990,29 +993,37 @@ body.home-view .chapter-rail {
     gap: 8px;
     text-align: left;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
 }
 .chapter-type-button:hover, .chapter-wrong-button:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
+    background: var(--surface-200);
+    color: var(--primary);
+    border-color: var(--primary);
 }
 .chapter-type-button.active, .chapter-wrong-button.active {
-    background: #254743;
-    color: #ffffff;
-    border-color: #3f7069;
+    background: var(--primary-light);
+    color: var(--primary);
+    border-color: var(--primary);
+    box-shadow: inset 3px 0 0 var(--accent-orange);
+    font-weight: 600;
 }
 .chapter-test-button {
     background: var(--accent-orange);
+    border-color: var(--accent-orange);
     color: #ffffff;
     font-weight: 600;
     margin-top: 4px;
 }
 .chapter-test-button:hover {
     background: var(--accent-orange-hover);
+    border-color: var(--accent-orange-hover);
+    color: #ffffff;
 }
 .chapter-wrong-button:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+    background: transparent;
+    border-color: transparent;
 }
 
 /* --------------------------------------------------------------------------

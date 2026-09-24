@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
-import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260924-fix-v3';
+import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260924-v4';
 import {
     getWrongAnswerEntries,
     getWrongAnswerQids,
@@ -672,7 +672,6 @@ export function createQuestionBlock(item, options = {}) {
     block.innerHTML = `
         <div class="question-header-meta">
             <span class="question-type-badge">${typeLabel}</span>
-            <span class="question-id-badge">ID: ${escapeAttribute(item.qid)}</span>
         </div>
         <p class="question-stem">${questionHtml}</p>
         ${editBadgeHtml}
