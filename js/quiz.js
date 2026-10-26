@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
 import { getWrongAnswerQids, recordCorrectPractice, recordWrongAnswer, updateStats } from './storage.js';
-import { updateChapterNavStatus } from './ui.js?v=20260924-v4';
+import { updateChapterNavStatus } from './ui.js?v=20261026-clean';
 
 const randomTestState = {
     mode: 'exam',
@@ -518,16 +518,16 @@ export function showQuizResults() {
         : '';
 
     const accuracyPct = Math.round((state.score / state.quizLength) * 100);
-    const gradeLevel = accuracyPct >= 90 ? 'EXCELLENT // 掌握熟练' : (accuracyPct >= 60 ? 'STANDARD // 达到标准' : 'CRITICAL // 建议巩固');
+    const gradeLevel = accuracyPct >= 90 ? '掌握熟练' : (accuracyPct >= 60 ? '达到及格' : '建议巩固');
 
     scoreEl.innerHTML = `
         <div class="quiz-result-hero">
-            <div class="quiz-result-tag"><i data-lucide="activity"></i> 测验诊断报告 · ${gradeLevel}</div>
-            <h3 class="quiz-result-headline">诊断评估完成</h3>
+            <div class="quiz-result-tag"><i data-lucide="check-circle-2"></i> 测试结果 · ${gradeLevel}</div>
+            <h3 class="quiz-result-headline">本次测试完成</h3>
         </div>
         <div class="quiz-score-hud">
             <div class="quiz-hud-card">
-                <span class="hud-label">得分 / 总量</span>
+                <span class="hud-label">答对 / 总题数</span>
                 <strong class="hud-value hud-score">${state.score} <span>/ ${state.quizLength}</span></strong>
             </div>
             <div class="quiz-hud-card">
@@ -541,10 +541,10 @@ export function showQuizResults() {
         </div>
         <div class="quiz-result-actions">
             ${wrongRetryButton}
-            <button class="quiz-button quiz-button-close" data-action="closeQuiz"><i data-lucide="check"></i> 退出测验</button>
+            <button class="action-button quiz-button-close" data-action="closeQuiz"><i data-lucide="check"></i> 完成并退出</button>
         </div>
         <div class="quiz-review-heading">
-            <h4><i data-lucide="file-text"></i> 答题明细与工程解析校核</h4>
+            <h4><i data-lucide="file-text"></i> 答题详情与解析</h4>
         </div>
         <div class="quiz-review-list">${reviewItems}</div>
     `;

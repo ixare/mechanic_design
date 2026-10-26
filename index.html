@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>机械设计基础 | 自测工作台</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260924-brand-cog">
-    <link rel="alternate icon" href="favicon.svg?v=20260924-brand-cog">
+    <title>机械设计基础 | 课程题库与自测</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20261026-clean">
+    <link rel="alternate icon" href="favicon.svg?v=20261026-clean">
     <script>
         MathJax = {
           tex: {
@@ -22,65 +22,66 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
     
     <link href="https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
     <script src="https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     
-    <link rel="stylesheet" href="styles.css?v=20260924-v7">
+    <link rel="stylesheet" href="styles.css?v=20261026-clean">
 </head>
 <body>
 
 
 <button id="menu-toggle" type="button" aria-label="打开导航" title="打开导航"><i data-lucide="menu"></i></button>
 
-<button id="notepad-toggle" type="button" aria-label="打开随手记" title="打开随手记"><i data-lucide="notebook-pen"></i></button>
-
 <div id="sidebar">
     <button id="sidebar-close" type="button" aria-label="关闭导航" title="关闭导航"><i data-lucide="x"></i></button>
 
-    <button class="sidebar-header" type="button" data-action="showHome" aria-label="返回工作台">
+    <button class="sidebar-header" type="button" data-action="showHome" aria-label="返回首页">
         <span class="brand-mark"><i data-lucide="cog"></i></span>
-        <span class="brand-copy"><strong>机械设计基础</strong><small>自测工作台</small></span>
+        <span class="brand-copy"><strong>机械设计基础</strong><small>课程题库与自测</small></span>
     </button>
     <div class="dark-mode-toggle">
-        <span>黑暗模式</span>
+        <span>深色外观</span>
         <label class="switch">
             <input type="checkbox" id="dark-mode-switch">
             <span class="slider"></span>
         </label>
     </div>
     <div class="sidebar-section search-sidebar-section">
-        <h4>全局搜索</h4>
+        <h4>检索</h4>
         <button class="sidebar-button search-launch-button" data-action="openSearchModal">
-            <i data-lucide="search"></i> 打开搜索面板
+            <i data-lucide="search"></i> 搜索与筛选题目
         </button>
     </div>
     <div class="sidebar-section">
-        <h4>随机测试</h4>
+        <h4>抽题测验</h4>
         <button class="sidebar-button" data-action="startMockExam"><i data-lucide="timer"></i> 模拟考试 (20分钟)</button>
         <button class="sidebar-button" data-action="startOverallTestMcq"><i data-lucide="list-checks"></i> 选择题随机测试</button>
         <button class="sidebar-button" data-action="startOverallTestTf"><i data-lucide="check"></i> 判断题随机测试</button>
     </div>
     <div class="sidebar-section">
-        <h4>数据记录</h4>
+        <h4>学习与管理</h4>
         <button class="sidebar-button" data-action="showDashboard"><i data-lucide="chart-no-axes-combined"></i> 学习统计</button>
         <button class="sidebar-button fav" data-action="showAllFavorites"><i data-lucide="star"></i> 我的收藏</button>
         <button class="sidebar-button wrong" data-action="showAllWrongAnswers"><i data-lucide="book-open-check"></i> 错题汇总</button>
         <button class="sidebar-button" data-action="showQuestionEditManager"><i data-lucide="file-pen-line"></i> 题目修订/录入</button>
-        <button class="sidebar-button" data-action="showDataSync"><i data-lucide="database"></i> 数据管理</button>
-        <button class="sidebar-button" data-action="triggerWallpaperUpload" style="margin-top: 5px;"><i data-lucide="image"></i> 设置壁纸</button>
+        <button class="sidebar-button" data-action="showDataSync"><i data-lucide="database"></i> 数据备份</button>
+        <button class="sidebar-button" data-action="triggerWallpaperUpload"><i data-lucide="image"></i> 自定义背景</button>
         <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;">
-        <button class="sidebar-button" data-action="showFeedback" style="margin-top: 5px;"><i data-lucide="message-circle"></i> 意见反馈</button>
+        <button class="sidebar-button" data-action="showFeedback"><i data-lucide="message-circle"></i> 意见反馈</button>
     </div>
 </div>
 
     <div id="main-content">
     <div class="main-container">
         <div class="workspace-topbar">
-            <span class="workspace-path"><i data-lucide="scan-line"></i> 浙大机械设计基础 · 课程题库</span>
-            <button class="topbar-search" type="button" data-action="openSearchModal" title="搜索题库"><i data-lucide="search"></i><span>搜索题库</span><kbd>/</kbd></button>
+            <span class="workspace-path">机械设计基础 · 课程复习题库</span>
+            <div class="topbar-actions">
+                <button class="topbar-search" type="button" data-action="openSearchModal" title="搜索题库"><i data-lucide="search"></i><span>搜索题库</span><kbd>/</kbd></button>
+                <button id="notepad-toggle" class="topbar-button" type="button" aria-label="打开随手记" title="打开随手记"><i data-lucide="notebook-pen"></i><span>随手记</span></button>
+            </div>
         </div>
         <h1 id="main-title">机械设计基础</h1>
 
@@ -99,7 +100,7 @@
                 <div id="welcome-message"></div>
             </div>
             <aside class="chapter-rail" aria-label="章节列表">
-                <div class="chapter-rail-header"><h2>章节列表</h2></div>
+                <div class="chapter-rail-header"><h2>章节目录</h2></div>
                 <nav id="chapter-nav-list" aria-label="章节练习导航"></nav>
             </aside>
         </div>
@@ -226,20 +227,20 @@
 <div id="quiz-modal">
     <div id="quiz-container">
         <button id="close-quiz" type="button" data-action="closeQuiz" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
-        <div id="quiz-timer" style="position: absolute; top: 20px; right: 60px; font-weight: bold; color: var(--primary); display: none;"></div>
+        <div id="quiz-timer" style="display: none;"></div>
         <h2 id="quiz-title">随机测试</h2>
         <div id="quiz-content" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div class="quiz-toolbar">
                 <div id="quiz-progress"></div>
                 <button id="quiz-favorite-btn" class="action-button favorite-button" style="display:none;"></button>
             </div>
             <div id="quiz-question-container">
                 <p class="keyboard-instructions" id="keyboard-instructions"></p>
-                <p id="quiz-question-text" style="font-size: 1.1em;"></p>
+                <p id="quiz-question-text"></p>
                 <div id="quiz-options"></div>
             </div>
             <div id="quiz-feedback"></div>
-            <div style="text-align:center; margin-top:20px;">
+            <div class="quiz-footer-actions">
                 <button id="submit-answer-btn" class="quiz-button">提交答案</button>
                 <button id="next-question-btn" class="quiz-button" style="display:none;">下一题</button>
             </div>
@@ -256,11 +257,11 @@
     <div class="notepad-container">
         <textarea id="notepad" placeholder="在这里记录公式、重点、笔记...&#10;(内容会自动保存)"></textarea>
     </div>
-    <div style="display: flex; justify-content: space-between; margin-top: 10px;">
-        <button class="text-button" id="btn-download-notepad" style="font-size: 0.85rem; color: var(--text-muted);">
-            <i data-lucide="download"></i> 导出TXT
+    <div class="notepad-footer">
+        <button class="text-button" id="btn-download-notepad">
+            <i data-lucide="download"></i> 导出 TXT
         </button>
-        <button class="text-button" id="btn-clear-notepad" style="font-size: 0.85rem; color: var(--text-muted);">
+        <button class="text-button" id="btn-clear-notepad">
             <i data-lucide="trash-2"></i> 清空
         </button>
     </div>
@@ -275,13 +276,13 @@
              <div><h3 id="stat-correct">0%</h3><small>正确率</small></div>
              <div><h3 id="stat-wrong-count">0</h3><small>当前错题</small></div>
         </div>
-        <div style="overflow-y:auto; max-height:400px;">
-            <table id="stats-table" style="width:100%; border-collapse:collapse;">
+        <div class="stats-table-scroll">
+            <table id="stats-table">
                 <thead>
-                    <tr style="border-bottom:2px solid var(--border);">
-                        <th style="text-align:left; padding:10px;">章节</th>
-                        <th style="width:100px;">进度</th>
-                        <th style="width:60px;">正确率</th>
+                    <tr>
+                        <th style="text-align:left;">章节</th>
+                        <th style="width:120px;">进度</th>
+                        <th style="width:90px; text-align:right;">正确率</th>
                     </tr>
                 </thead>
                 <tbody id="stats-table-body"></tbody>
@@ -290,18 +291,15 @@
     </div>
 </div>
 
-    </div>
-</div>
-
 <div id="cropper-modal" class="modal">
-    <div class="modal-content" style="max-width: 800px; width: 95%; height: 80vh; display: flex; flex-direction: column; padding: 1.5rem;">
+    <div class="modal-content cropper-modal-panel">
         <button class="close-modal" type="button" id="close-cropper" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
-        <h2 style="margin-bottom: 1rem;">裁剪壁纸</h2>
-        <div style="flex: 1; min-height: 0; background: #e2e8f0; position: relative; border-radius: var(--radius-md); overflow: hidden;">
-            <img id="cropper-image" style="max-width: 100%; display: block;">
+        <h2>裁剪背景图片</h2>
+        <div class="cropper-stage">
+            <img id="cropper-image" alt="待裁剪背景">
         </div>
-        <div style="text-align: center; margin-top: 1.5rem;">
-            <button class="quiz-button" id="btn-confirm-crop" style="width: auto; padding: 0.8rem 2rem; font-size: 1rem;">
+        <div class="cropper-actions">
+            <button class="quiz-button" id="btn-confirm-crop">
                 <i data-lucide="check"></i> 确认并应用
             </button>
         </div>
@@ -309,50 +307,50 @@
 </div>
 
 <div id="data-modal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content data-modal-panel">
         <button class="close-modal" type="button" id="close-data-sync" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
-        <h2><i data-lucide="database"></i> 数据管理</h2>
-        <p>导出：复制下方代码保存。导入：粘贴代码并点击恢复。</p>
-        <textarea id="data-area" style="width:100%; height:150px; margin:10px 0; padding:10px; border-radius:5px; border:1px solid var(--border); font-family:monospace;"></textarea>
+        <h2><i data-lucide="database"></i> 数据备份与恢复</h2>
+        <p class="modal-subtitle">导出：生成导出码或下载备份文件保存。导入：粘贴导出码或选择备份文件后点击恢复。</p>
+        <textarea id="data-area" class="data-textarea" placeholder="在此粘贴备份代码或点击下方按钮生成..."></textarea>
         <input type="file" id="data-file-input" accept="application/json,.json" style="display:none;">
-        <div style="text-align:right;">
+        <div class="question-sync-actions">
             <button class="action-button" id="btn-export-data"><i data-lucide="copy"></i> 生成导出码</button>
             <button class="action-button" id="btn-copy-export-data"><i data-lucide="clipboard"></i> 复制导出码</button>
             <button class="action-button" data-action="triggerDataFileImport"><i data-lucide="file-up"></i> 导入备份文件</button>
-            <button class="action-button" id="btn-import-data" style="background-color:var(--primary); color:white;"><i data-lucide="file-input"></i> 恢复数据</button>
+            <button class="quiz-button" id="btn-import-data"><i data-lucide="file-input"></i> 恢复数据</button>
         </div>
     </div>
 </div>
 
 <div id="feedback-modal" class="modal">
-    <div class="modal-content" style="max-width: 500px;">
+    <div class="modal-content feedback-modal-panel">
         <button class="close-modal" type="button" id="close-feedback" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2><i data-lucide="message-circle"></i> 意见反馈</h2>
-        <p style="color: var(--text-muted); margin-bottom: 15px;">遇到问题或有改进建议？选择一种方式告诉我：</p>
-        <div style="margin-bottom: 15px;">
-            <label style="font-weight: 500; display: block; margin-bottom: 5px;">反馈类型</label>
-            <select id="feedback-type" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface-100); color: var(--text-main);">
+        <p class="modal-subtitle">遇到问题或有改进建议？选择一种方式反馈：</p>
+        <label class="form-field">
+            <span>反馈类型</span>
+            <select id="feedback-type">
                 <option value="bug">Bug / 题目错误</option>
                 <option value="feature">功能建议</option>
                 <option value="other">其他</option>
             </select>
-        </div>
-        <div style="margin-bottom: 15px;">
-            <label style="font-weight: 500; display: block; margin-bottom: 5px;">详细描述</label>
-            <textarea id="feedback-content" rows="5" placeholder="请描述你遇到的问题或建议..." style="width: 100%; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface-100); color: var(--text-main); resize: vertical;"></textarea>
-        </div>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="action-button" id="btn-feedback-github" style="background-color: var(--primary); color: white; flex: 1;">
-                <i data-lucide="github"></i> 提交到 GitHub
-            </button>
-            <button class="action-button" id="btn-feedback-copy" style="flex: 1;">
+        </label>
+        <label class="form-field">
+            <span>详细描述</span>
+            <textarea id="feedback-content" rows="5" placeholder="请描述你遇到的问题或建议..."></textarea>
+        </label>
+        <div class="question-edit-actions">
+            <button class="action-button" id="btn-feedback-copy">
                 <i data-lucide="copy"></i> 复制反馈内容
+            </button>
+            <button class="quiz-button" id="btn-feedback-github">
+                <i data-lucide="github"></i> 提交到 GitHub
             </button>
         </div>
     </div>
 </div>
 
 <script src="questions.js"></script>
-<script type="module" src="app.js?v=20260924-v4"></script>
+<script type="module" src="app.js?v=20261026-clean"></script>
 </body>
 </html>

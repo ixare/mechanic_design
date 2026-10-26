@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { typesetMath } from './utils.js';
-import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20260924-v4';
+import { disposeMechanismCanvas, initMechanismCanvas } from './mechanism.js?v=20261026-clean';
 import {
     getWrongAnswerEntries,
     getWrongAnswerQids,
@@ -24,6 +24,7 @@ import {
 } from './questionEdits.js';
 
 const CUSTOM_CHAPTER_VALUE = '__custom_chapter__';
+let returnToManagerOnClose = false;
 let questionIndexView = 'list';
 let questionIndexScrollHandler = null;
 let questionIndexResizeHandler = null;
@@ -356,22 +357,28 @@ function renderWelcomeOverview() {
     }, 0);
     const completed = state.userStats.total;
     const accuracy = completed ? Math.round(state.userStats.correct / completed * 100) : 0;
+    const wrongCount = getWrongAnswerQids().length;
     const firstChapter = chapters.find(chapter => state.all_data[chapter].mcq.length) || chapters[0];
     const welcome = document.getElementById('welcome-message');
 
     welcome.innerHTML = `
         <section class="welcome-stage" aria-label="练习概览">
             <div class="stage-copy">
-                <div class="stage-heading"><span class="stage-rule"></span><span>课程自测 / 章节练习</span></div>
-                <h2>从题出发，<br>理解机械。</h2>
-                <div class="stage-actions">
-                    <button type="button" class="stage-primary" data-action="showQuestions" data-chapter="${escapeAttribute(firstChapter || '')}" data-type="mcq">开始章节练习 <i data-lucide="arrow-up-right"></i></button>
-                    <button type="button" class="stage-secondary" data-action="startMockExam"><i data-lucide="timer"></i> 模拟考试</button>
+                <div>
+                    <div class="stage-heading"><span>课程自测与章节题库</span></div>
+                    <h2>机械设计基础</h2>
+                    <p class="stage-description">收录课程各章节单选题与判断题，支持按章节顺序刷题、点击选项即时自测、错题自动归集与限时模拟考试。</p>
+                    <div class="stage-actions">
+                        <button type="button" class="stage-primary" data-action="showQuestions" data-chapter="${escapeAttribute(firstChapter || '')}" data-type="mcq">开始章节练习 <i data-lucide="arrow-right"></i></button>
+                        <button type="button" class="stage-secondary" data-action="startMockExam"><i data-lucide="timer"></i> 模拟考试</button>
+                        ${wrongCount > 0 ? `<button type="button" class="stage-secondary" data-action="showAllWrongAnswers"><i data-lucide="book-open-check"></i> 错题本 (${wrongCount})</button>` : ''}
+                    </div>
                 </div>
                 <div class="stage-metrics">
-                    <div><strong>${totalQuestions}</strong><span>题库题目</span></div>
+                    <div><strong>${totalQuestions}</strong><span>题库总量</span></div>
                     <div><strong>${completed}</strong><span>累计练习</span></div>
                     <div><strong>${accuracy}%</strong><span>练习正确率</span></div>
+                    <div><strong>${wrongCount}</strong><span>待复习错题</span></div>
                 </div>
             </div>
             <div class="mechanism-visual">
@@ -380,23 +387,25 @@ function renderWelcomeOverview() {
         </section>
         <section class="chapter-index" aria-labelledby="chapter-index-title">
             <div class="chapter-index-heading">
-                <div><span class="section-kicker">按章节练习</span><h2 id="chapter-index-title">章节索引</h2></div>
-                <span class="chapter-total">${chapters.length} 章 / ${totalQuestions} 题</span>
+                <div><span class="section-kicker">课程章节</span><h2 id="chapter-index-title">按章节练习</h2></div>
+                <span class="chapter-total">共 ${chapters.length} 章 · ${totalQuestions} 题</span>
             </div>
             <div class="chapter-grid">
                 ${chapters.map((chapter, index) => {
                     const group = state.all_data[chapter];
                     const count = group.mcq.length + group.tf.length;
+                    const chapterWrong = getWrongAnswerQids(chapter).length;
                     const label = chapter.replace(/^第[^章]+章\s*/, '');
                     return `<div class="chapter-row">
                         <button type="button" class="chapter-main" data-action="showQuestions" data-chapter="${escapeAttribute(chapter)}" data-type="mcq" aria-label="${escapeAttribute(chapter)}选择题">
                             <span class="chapter-number">${String(index + 1).padStart(2, '0')}</span>
                             <span class="chapter-name">${escapeAttribute(label)}</span>
+                            ${chapterWrong > 0 ? `<span class="chapter-wrong-pill">错题 ${chapterWrong}</span>` : ''}
                             <span class="chapter-count">${count} 题</span>
                         </button>
                         <div class="chapter-row-actions">
-                            <button type="button" data-action="showQuestions" data-chapter="${escapeAttribute(chapter)}" data-type="mcq" title="${escapeAttribute(chapter)}选择题" aria-label="${escapeAttribute(chapter)}选择题"><i data-lucide="list"></i></button>
-                            <button type="button" data-action="showQuestions" data-chapter="${escapeAttribute(chapter)}" data-type="tf" title="${escapeAttribute(chapter)}判断题" aria-label="${escapeAttribute(chapter)}判断题"><i data-lucide="check-check"></i></button>
+                            <button type="button" data-action="showQuestions" data-chapter="${escapeAttribute(chapter)}" data-type="mcq" title="${escapeAttribute(chapter)}选择题 (${group.mcq.length}题)" aria-label="${escapeAttribute(chapter)}选择题">单选</button>
+                            <button type="button" data-action="showQuestions" data-chapter="${escapeAttribute(chapter)}" data-type="tf" title="${escapeAttribute(chapter)}判断题 (${group.tf.length}题)" aria-label="${escapeAttribute(chapter)}判断题">判断</button>
                         </div>
                     </div>`;
                 }).join('')}
@@ -615,6 +624,41 @@ export function jumpToQuestion(qid) {
     block.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+export function selectPracticeOption(optionEl) {
+    const block = optionEl.closest('.question-block');
+    if (!block) return;
+    const qid = block.dataset.qid;
+    const item = state.question_lookup[qid];
+    if (!item) return;
+
+    const selected = optionEl.dataset.opt;
+    const correct = String(item.answer || '').trim();
+    const allOptions = block.querySelectorAll('.question-options-list li[data-opt]');
+    allOptions.forEach(li => {
+        li.classList.remove('is-selected', 'is-correct', 'is-wrong');
+        if (li.dataset.opt === correct) {
+            li.classList.add('is-correct');
+        }
+    });
+    optionEl.classList.add('is-selected');
+    if (selected !== correct) {
+        optionEl.classList.add('is-wrong');
+    }
+
+    const toggleBtn = block.querySelector('[data-action="toggleAnswer"]');
+    const answerSpan = block.querySelector('.answer-span');
+    const explanationSpan = block.querySelector('.explanation-span');
+    if (answerSpan) answerSpan.style.display = 'inline-flex';
+    if (explanationSpan && explanationSpan.innerHTML.trim()) {
+        explanationSpan.style.display = 'block';
+        typesetMath([explanationSpan]);
+    }
+    if (toggleBtn) {
+        toggleBtn.dataset.state = 'shown';
+        toggleBtn.innerHTML = '<i data-lucide="eye-off"></i> 隐藏答案';
+    }
+}
+
 export function createQuestionBlock(item, options = {}) {
     const block = document.createElement('div');
     block.className = 'question-block';
@@ -632,7 +676,6 @@ export function createQuestionBlock(item, options = {}) {
 
     let explanationHtml = '';
     if (item.explanation) {
-        // DOMPurify and marked will be available globally as they are added via CDN to global scope.
         explanationHtml = (typeof marked !== 'undefined' && marked.parse) ? marked.parse(item.explanation) : item.explanation;
         if (typeof DOMPurify !== 'undefined') {
             explanationHtml = DOMPurify.sanitize(explanationHtml);
@@ -655,35 +698,50 @@ export function createQuestionBlock(item, options = {}) {
         : (hasLocalEdit ? '<span class="local-edit-badge"><i data-lucide="pen"></i> 本地修订</span>' : '');
     const editAction = hasLocalAddition ? 'openQuestionEntryEditor' : 'openQuestionEditor';
     const editLabel = hasLocalAddition ? '编辑录入' : '编辑';
-    const typeLabel = item.type === 'mcq' ? 'MCQ // 选择题' : 'TF // 判断题';
+    const typeLabel = item.type === 'mcq' ? '单选题' : '判断题';
+    const showChapterBadge = !state.activeChapter && item.chapter;
+    const chapterBadgeHtml = showChapterBadge
+        ? `<span class="question-chapter-badge">${escapeAttribute(item.chapter)}</span>`
+        : '';
+
     const optionsHtml = item.type === 'mcq' ? `
         <ul class="question-options-list">
             ${item.options.map(o => {
+                const rawKeyMatch = String(o).trim().match(/^([A-Za-z])/);
+                const rawKey = rawKeyMatch ? rawKeyMatch[1].toUpperCase() : '';
                 const formatted = formatInlineHtml(o, searchTerms);
                 const match = formatted.match(/^([A-Za-z][\.\、\s]*)(.*)$/);
                 if (match) {
-                    return `<li><span class="opt-key">${match[1].replace(/[\.\、\s]+$/, '')}</span><span class="opt-val">${match[2]}</span></li>`;
+                    return `<li data-action="selectPracticeOption" data-opt="${escapeAttribute(rawKey)}"><span class="opt-key">${match[1].replace(/[\.\、\s]+$/, '')}</span><span class="opt-val">${match[2]}</span></li>`;
                 }
-                return `<li>${formatted}</li>`;
+                return `<li data-action="selectPracticeOption" data-opt="${escapeAttribute(rawKey)}">${formatted}</li>`;
             }).join('')}
         </ul>
-    ` : '';
+    ` : `
+        <ul class="question-options-list tf-options-list">
+            <li data-action="selectPracticeOption" data-opt="✓"><span class="opt-key">✓</span><span class="opt-val">正确</span></li>
+            <li data-action="selectPracticeOption" data-opt="×"><span class="opt-key">×</span><span class="opt-val">错误</span></li>
+        </ul>
+    `;
 
     block.innerHTML = `
         <div class="question-header-meta">
-            <span class="question-type-badge">${typeLabel}</span>
+            <div class="question-badges">
+                <span class="question-type-badge">${typeLabel}</span>
+                ${chapterBadgeHtml}
+                ${editBadgeHtml}
+            </div>
+            ${wrongMetaHtml}
         </div>
         <p class="question-stem">${questionHtml}</p>
-        ${editBadgeHtml}
-        ${wrongMetaHtml}
         ${optionsHtml}
         <div class="action-buttons-container">
             <button class="action-button" data-action="toggleAnswer" data-state="hidden"><i data-lucide="eye"></i> 显示答案</button>
-            <span class="answer-span"><strong class="answer-badge">标准答案</strong> ${item.answer}</span>
-            <div class="explanation-span">${explanationHtml ? `<div class="explanation-title"><i data-lucide="book-marked"></i> 工程解析与校核</div><div class="explanation-body">${explanationHtml}</div>` : ''}</div>
+            <span class="answer-span"><strong class="answer-badge">答案</strong> ${item.answer}</span>
             <button class="action-button favorite-button ${isFav ? 'favorited' : ''}" data-qid="${item.qid}" data-action="toggleFavorite">${isFav ? '<i data-lucide="star"></i> 已收藏' : '<i data-lucide="star"></i> 收藏'}</button>
             <button class="action-button edit-question-button" data-qid="${item.qid}" data-action="${editAction}"><i data-lucide="square-pen"></i> ${editLabel}</button>
             <button class="action-button remove-wrong-answer-btn" data-qid="${item.qid}" data-chapter="${item.chapter}" data-action="removeWrongAnswer"><i data-lucide="trash-2"></i> 移除此题</button>
+            <div class="explanation-span">${explanationHtml ? `<div class="explanation-title">题目解析</div><div class="explanation-body">${explanationHtml}</div>` : ''}</div>
         </div>
     `;
     return block;
@@ -792,6 +850,12 @@ export function updateQuestionEntryTypeFields() {
 }
 
 export function openQuestionEntryModal(defaults = {}) {
+    const managerModal = document.getElementById('question-edit-manager-modal');
+    if (managerModal && managerModal.style.display === 'block') {
+        returnToManagerOnClose = true;
+        managerModal.style.display = 'none';
+    }
+
     const addition = defaults || {};
     const qid = addition.qid || '';
     document.getElementById('question-entry-qid').value = qid;
@@ -824,6 +888,10 @@ export function openQuestionEntryEditor(qid) {
 
 export function closeQuestionEntryModal() {
     document.getElementById('question-entry-modal').style.display = 'none';
+    if (returnToManagerOnClose) {
+        returnToManagerOnClose = false;
+        showQuestionEditManager();
+    }
 }
 
 export function handleQuestionEntrySubmit(event) {
@@ -850,6 +918,12 @@ export function openQuestionEditModal(qid) {
     const question = state.question_lookup[qid];
     if (!question) return;
 
+    const managerModal = document.getElementById('question-edit-manager-modal');
+    if (managerModal && managerModal.style.display === 'block') {
+        returnToManagerOnClose = true;
+        managerModal.style.display = 'none';
+    }
+
     document.getElementById('question-edit-qid').value = question.qid;
     document.getElementById('question-edit-question').value = question.question || '';
     document.getElementById('question-edit-answer').value = question.answer || '';
@@ -872,6 +946,10 @@ export function openQuestionEditModal(qid) {
 
 export function closeQuestionEditModal() {
     document.getElementById('question-edit-modal').style.display = 'none';
+    if (returnToManagerOnClose) {
+        returnToManagerOnClose = false;
+        showQuestionEditManager();
+    }
 }
 
 export function handleQuestionEditSubmit(event) {
@@ -915,11 +993,13 @@ export function discardQuestionAdditionById(qid) {
 }
 
 export function showQuestionEditManager() {
+    returnToManagerOnClose = false;
     renderQuestionEditManager();
     document.getElementById('question-edit-manager-modal').style.display = 'block';
 }
 
 export function closeQuestionEditManager() {
+    returnToManagerOnClose = false;
     document.getElementById('question-edit-manager-modal').style.display = 'none';
 }
 
@@ -1174,7 +1254,7 @@ export function openSearchModal() {
     const modal = document.getElementById('search-modal');
     const input = document.getElementById('global-search');
     if (!modal) return;
-    modal.style.display = 'flex';
+    modal.style.display = 'block';
     setTimeout(() => input?.focus(), 0);
 }
 
@@ -1442,14 +1522,26 @@ export function toggleAllAnswers() {
     document.querySelectorAll('.question-block.visible').forEach(block => {
         const answerSpan = block.querySelector('.answer-span');
         const explanationSpan = block.querySelector('.explanation-span');
+        const toggleBtn = block.querySelector('[data-action="toggleAnswer"]');
         if (showing) {
             answerSpan.style.display = 'none';
             if (explanationSpan) explanationSpan.style.display = 'none';
+            if (toggleBtn) {
+                toggleBtn.dataset.state = 'hidden';
+                toggleBtn.innerHTML = '<i data-lucide="eye"></i> 显示答案';
+            }
+            block.querySelectorAll('.question-options-list li').forEach(li => {
+                li.classList.remove('is-selected', 'is-correct', 'is-wrong');
+            });
         } else {
-            answerSpan.style.display = 'inline';
-            if (explanationSpan) {
+            answerSpan.style.display = 'inline-flex';
+            if (explanationSpan && explanationSpan.innerHTML.trim()) {
                 explanationSpan.style.display = 'block';
                 typesetMath([explanationSpan]);
+            }
+            if (toggleBtn) {
+                toggleBtn.dataset.state = 'shown';
+                toggleBtn.innerHTML = '<i data-lucide="eye-off"></i> 隐藏答案';
             }
         }
     });

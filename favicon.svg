@@ -1,21 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- 机械设计基础 - 侧边栏同款先锋品牌标志 Favicon (Lucide Cog 蓝底精密齿轮) -->
   <defs>
     <linearGradient id="brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0284c7" />
-      <stop offset="100%" stop-color="#0369a1" />
+      <stop offset="0%" stop-color="#25547a" />
+      <stop offset="100%" stop-color="#183b59" />
     </linearGradient>
     <filter id="subtle-glow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.2" />
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.18" />
     </filter>
   </defs>
 
-  <!-- 蓝底品牌圆角矩形背景 (与侧边栏 brand-mark 100% 保持一致) -->
   <rect width="64" height="64" rx="14" fill="url(#brand-gradient)" filter="url(#subtle-glow)" />
-  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25" fill="none" stroke="rgba(255, 255, 255, 0.22)" stroke-width="1.5" />
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25" fill="none" stroke="rgba(255, 255, 255, 0.18)" stroke-width="1.5" />
 
-  <!-- 居中精细 Lucide Cog 矢量图标结构 (白色线条，小尺寸高辨识度) -->
-  <g transform="translate(8, 8) scale(2)" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+  <g transform="translate(8, 8) scale(2)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M11 10.27 7 3.34" />
     <path d="m11 13.73-4 6.93" />
     <path d="M12 22v-2" />

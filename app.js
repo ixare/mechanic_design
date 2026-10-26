@@ -12,6 +12,7 @@ import {
     removeSingleWrongAnswer, toggleFavorite, toggleAllAnswers, toggleFavoritesView, clearCurrentChapterWrongAnswers,
     showQuestions, showChapterWrongAnswers, showAllFavorites, filterQuestions,
     showAllWrongAnswers, clearAllWrongAnswers, jumpToQuestion, setQuestionIndexView,
+    selectPracticeOption,
     openSearchModal, closeSearchModal,
     closeQuestionEntryModal,
     closeQuestionEditManager, closeQuestionEditModal, copyQuestionSyncRequest,
@@ -20,13 +21,13 @@ import {
     openQuestionEditModal,
     openQuestionSyncRequestIssue, showQuestionEditManager, updateQuestionEditSummary,
     updateQuestionEntryChapterField, updateQuestionEntryTypeFields
-} from './js/ui.js?v=20260923-index-markers';
+} from './js/ui.js?v=20261026-clean';
 import {
     startMockExam, startOverallTest, startAllWrongAnswersTest, 
     startCurrentChapterWrongAnswersTest, startChapterTest,
     startLastWrongQuizTest, submitQuizAnswer, nextQuizQuestion, closeQuiz,
     openRandomTestSetup
-} from './js/quiz.js?v=20260923-index-markers';
+} from './js/quiz.js?v=20261026-clean';
 import { typesetMath } from './js/utils.js';
 import { loadQuestionEdits } from './js/questionEdits.js';
 import { initIcons } from './js/icons.js?v=20260923';
@@ -95,17 +96,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                 case 'startChapterTest': startChapterTest(chapter); break;
                 case 'jumpToQuestion': jumpToQuestion(actionBtn.dataset.qid); break;
                 case 'setQuestionIndexView': setQuestionIndexView(actionBtn.dataset.view); break;
+                case 'selectPracticeOption': selectPracticeOption(actionBtn); break;
                 
-                case 'toggleAnswer': 
-                    const answerSpan = actionBtn.nextElementSibling;
-                    const explanationSpan = answerSpan.nextElementSibling;
+                case 'toggleAnswer': {
+                    const block = actionBtn.closest('.question-block');
+                    const answerSpan = block?.querySelector('.answer-span') || actionBtn.nextElementSibling;
+                    const explanationSpan = block?.querySelector('.explanation-span') || answerSpan?.nextElementSibling;
                     const isShowing = actionBtn.dataset.state === 'shown';
-                    answerSpan.style.display = isShowing ? 'none' : 'inline';
-                    explanationSpan.style.display = isShowing ? 'none' : 'block';
+                    if (answerSpan) answerSpan.style.display = isShowing ? 'none' : 'inline-flex';
+                    if (explanationSpan) {
+                        explanationSpan.style.display = (isShowing || !explanationSpan.innerHTML.trim()) ? 'none' : 'block';
+                    }
                     actionBtn.dataset.state = isShowing ? 'hidden' : 'shown';
                     actionBtn.innerHTML = isShowing ? '<i data-lucide="eye"></i> 显示答案' : '<i data-lucide="eye-off"></i> 隐藏答案';
-                    if (!isShowing) typesetMath([explanationSpan]);
+                    if (isShowing) {
+                        block?.querySelectorAll('.question-options-list li').forEach(li => {
+                            li.classList.remove('is-selected', 'is-correct', 'is-wrong');
+                        });
+                    } else if (explanationSpan && explanationSpan.innerHTML.trim()) {
+                        typesetMath([explanationSpan]);
+                    }
                     break;
+                }
                 case 'toggleFavorite': toggleFavorite(qid, actionBtn); break;
                 case 'removeWrongAnswer': removeSingleWrongAnswer(qid, chapter, actionBtn); break;
                 case 'openQuestionEditor': openQuestionEditModal(qid); break;
@@ -141,9 +153,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     document.getElementById('close-dashboard').addEventListener('click', closeDashboard);
     document.getElementById('close-search-modal').addEventListener('click', closeSearchModal);
-    document.getElementById('search-modal').addEventListener('click', (event) => {
-        if (event.target.id === 'search-modal') closeSearchModal();
-    });
     document.getElementById('close-cropper').addEventListener('click', closeCropper);
     document.getElementById('btn-confirm-crop').addEventListener('click', confirmCrop);
     document.getElementById('close-data-sync').addEventListener('click', closeDataSync);
@@ -160,6 +169,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-download-question-sync').addEventListener('click', downloadQuestionSyncRequest);
     document.getElementById('btn-open-question-sync-issue').addEventListener('click', openQuestionSyncRequestIssue);
     document.getElementById('btn-confirm-question-notice').addEventListener('click', closeQuestionNotice);
+
+    // 点击弹窗空白遮罩处自动关闭弹窗
+    const modalBackdropCloseMap = {
+        'dashboard-modal': closeDashboard,
+        'question-edit-manager-modal': closeQuestionEditManager,
+        'question-entry-modal': closeQuestionEntryModal,
+        'question-edit-modal': closeQuestionEditModal,
+        'data-modal': closeDataSync,
+        'feedback-modal': closeFeedbackModal,
+        'cropper-modal': closeCropper,
+        'question-notice-modal': closeQuestionNotice,
+        'search-modal': closeSearchModal
+    };
+
+    Object.entries(modalBackdropCloseMap).forEach(([id, closeFn]) => {
+        const modal = document.getElementById(id);
+        if (modal) {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    closeFn();
+                }
+            });
+        }
+    });
     
     document.getElementById('btn-export-data').addEventListener('click', exportData);
     document.getElementById('btn-copy-export-data')?.addEventListener('click', copyExportData);
