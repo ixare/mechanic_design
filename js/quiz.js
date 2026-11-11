@@ -1,20 +1,37 @@
 import { state } from './state.js';
-import { typesetMath } from './utils.js';
+import {
+    escapeAttr,
+    escapeHtml,
+    formatInlineHtml,
+    getChapterOrder,
+    parseMcqOption,
+    renderMarkdown,
+    showToast,
+    typesetMath
+} from './utils.js';
+import { renderIcons } from './icons.js';
+import { closeModal, confirmDialog, configureModal, openModal, requestCloseModal } from './modal.js';
 import { getWrongAnswerQids, recordCorrectPractice, recordWrongAnswer, updateStats } from './storage.js';
-import { updateChapterNavStatus } from './ui.js?v=20261026-clean';
+import { updateChapterNavStatus } from './ui.js';
 
 const randomTestState = {
     mode: 'exam',
     source: 'all',
-    selectedChapters: []
+    selectedChapters: null,
+    questionCount: 20,
+    examPreset: 'standard'
 };
 
 function getAllChapters() {
-    return Object.keys(state.all_data);
+    return Object.keys(state.all_data).sort((a, b) => getChapterOrder(a) - getChapterOrder(b));
 }
 
 function getSelectedChapters() {
-    return randomTestState.selectedChapters.filter(chapter => state.all_data[chapter]);
+    const available = new Set(getAllChapters());
+    if (!Array.isArray(randomTestState.selectedChapters)) {
+        return getAllChapters();
+    }
+    return randomTestState.selectedChapters.filter(chapter => available.has(chapter));
 }
 
 function matchesRandomSource(question, wrongQids) {
@@ -54,8 +71,16 @@ function getChapterQuestionCount(chapterName) {
     return chapterQuestions.filter(question => matchesRandomSource(question, wrongQids)).length;
 }
 
-function shuffleQuestions(questions) {
-    return [...questions].sort(() => 0.5 - Math.random());
+/**
+ * 无偏 Fisher-Yates 洗牌算法
+ */
+export function shuffleQuestions(questions) {
+    const result = [...(questions || [])];
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
 }
 
 function getRandomSourceLabel() {
@@ -65,16 +90,6 @@ function getRandomSourceLabel() {
         favorites: '收藏'
     };
     return labels[randomTestState.source] || labels.all;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function escapeAttr(text) {
-    return escapeHtml(text).replace(/"/g, '&quot;');
 }
 
 function ensureRandomTestModal() {
@@ -96,6 +111,10 @@ function ensureRandomTestModal() {
                     <label><input type="radio" name="random-test-source" value="favorites"> 只抽收藏</label>
                 </div>
             </div>
+            <div class="random-test-section" id="random-test-count-section">
+                <div class="random-test-section-title" id="random-test-count-label">抽题数量</div>
+                <div class="random-count-options" id="random-count-options"></div>
+            </div>
             <div class="random-test-section">
                 <div class="random-test-toolbar">
                     <div class="random-test-section-title">选择章节</div>
@@ -108,11 +127,12 @@ function ensureRandomTestModal() {
             </div>
             <div id="random-test-summary" class="random-test-summary"></div>
             <div class="random-test-actions">
-                <button class="quiz-button" id="start-random-test-confirm"><i data-lucide="play"></i> 开始测试</button>
+                <button type="button" class="quiz-button" id="start-random-test-confirm"><i data-lucide="play"></i> 开始测试</button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
+    renderIcons(modal);
 
     modal.addEventListener('change', event => {
         if (event.target.name === 'random-test-source') {
@@ -124,29 +144,73 @@ function ensureRandomTestModal() {
             randomTestState.selectedChapters = Array.from(modal.querySelectorAll('input[name="random-test-chapter"]:checked')).map(input => input.value);
             updateRandomTestSummary();
         }
+        if (event.target.name === 'random-test-count') {
+            randomTestState.questionCount = Number(event.target.value);
+            updateRandomTestSummary();
+        }
+        if (event.target.name === 'random-exam-preset') {
+            randomTestState.examPreset = event.target.value;
+            updateRandomTestSummary();
+        }
     });
-    modal.querySelector('#close-random-test-modal').addEventListener('click', closeRandomTestSetup);
-    modal.querySelector('#random-test-select-all').addEventListener('click', () => {
+    modal.querySelector('#close-random-test-modal')?.addEventListener('click', closeRandomTestSetup);
+    modal.querySelector('#random-test-select-all')?.addEventListener('click', () => {
         randomTestState.selectedChapters = getAllChapters();
         renderRandomTestChapters();
         updateRandomTestSummary();
     });
-    modal.querySelector('#random-test-clear-all').addEventListener('click', () => {
+    modal.querySelector('#random-test-clear-all')?.addEventListener('click', () => {
         randomTestState.selectedChapters = [];
         renderRandomTestChapters();
         updateRandomTestSummary();
     });
-    modal.querySelector('#start-random-test-confirm').addEventListener('click', startConfiguredRandomTest);
-    modal.addEventListener('click', event => {
-        if (event.target === modal) closeRandomTestSetup();
-    });
+    modal.querySelector('#start-random-test-confirm')?.addEventListener('click', startConfiguredRandomTest);
+    configureModal('random-test-modal', { closeOnBackdrop: true });
 
     return modal;
 }
 
+function renderRandomTestCountOptions() {
+    const label = document.getElementById('random-test-count-label');
+    const container = document.getElementById('random-count-options');
+    if (!container || !label) return;
+
+    if (randomTestState.mode === 'exam') {
+        label.textContent = '考卷规格';
+        const presets = [
+            { value: 'standard', text: '标准模拟 (30单选+20判断 · 20分钟)' },
+            { value: 'quick', text: '快速测验 (15单选+10判断 · 10分钟)' },
+            { value: 'full', text: '所选全部 (不限时)' }
+        ];
+        container.innerHTML = presets.map(preset => `
+            <label>
+                <input type="radio" name="random-exam-preset" value="${preset.value}" ${randomTestState.examPreset === preset.value ? 'checked' : ''}>
+                <span>${preset.text}</span>
+            </label>
+        `).join('');
+        return;
+    }
+
+    label.textContent = '抽题数量';
+    const counts = [
+        { value: 10, text: '10 题' },
+        { value: 20, text: '20 题' },
+        { value: 30, text: '30 题' },
+        { value: 50, text: '50 题' },
+        { value: 0, text: '全部' }
+    ];
+    container.innerHTML = counts.map(item => `
+        <label>
+            <input type="radio" name="random-test-count" value="${item.value}" ${randomTestState.questionCount === item.value ? 'checked' : ''}>
+            <span>${item.text}</span>
+        </label>
+    `).join('');
+}
+
 function renderRandomTestChapters() {
     const container = document.getElementById('random-test-chapters');
-    const selected = new Set(randomTestState.selectedChapters);
+    if (!container) return;
+    const selected = new Set(getSelectedChapters());
     container.innerHTML = getAllChapters().map(chapter => {
         const count = getChapterQuestionCount(chapter);
         return `
@@ -161,43 +225,59 @@ function renderRandomTestChapters() {
 
 function updateRandomTestSummary() {
     const summary = document.getElementById('random-test-summary');
+    if (!summary) return;
     const selectedCount = getSelectedChapters().length;
     const sourceLabel = getRandomSourceLabel();
     const mcqCount = buildQuestionPool('mcq').length;
     const tfCount = buildQuestionPool('tf').length;
     const total = randomTestState.mode === 'exam' ? mcqCount + tfCount : buildQuestionPool(randomTestState.mode).length;
-    const modeLabel = randomTestState.mode === 'exam'
-        ? `模拟考试：可抽 ${mcqCount} 道选择题、${tfCount} 道判断题`
-        : `${randomTestState.mode === 'mcq' ? '选择题' : '判断题'}随机测试：可抽 ${total} 道`;
+
+    let modeLabel;
+    if (randomTestState.mode === 'exam') {
+        modeLabel = `模拟考试：池内共 ${mcqCount} 道单选、${tfCount} 道判断`;
+    } else {
+        const limitLabel = randomTestState.questionCount > 0
+            ? `抽取最多 ${Math.min(randomTestState.questionCount, total)} 道（池内共 ${total} 道）`
+            : `全部 ${total} 道`;
+        modeLabel = `${randomTestState.mode === 'mcq' ? '选择题' : '判断题'}随机测试：${limitLabel}`;
+    }
     summary.textContent = `已选 ${selectedCount} 个章节，来源：${sourceLabel}，${modeLabel}`;
 }
 
 export function openRandomTestSetup(mode) {
     const modal = ensureRandomTestModal();
     randomTestState.mode = mode;
-    randomTestState.source = 'all';
-    randomTestState.selectedChapters = getAllChapters();
+    if (!Array.isArray(randomTestState.selectedChapters)) {
+        randomTestState.selectedChapters = getAllChapters();
+    }
 
     const titleMap = {
         exam: '模拟考试设置',
         mcq: '选择题随机测试设置',
         tf: '判断题随机测试设置'
     };
-    document.getElementById('random-test-title').innerHTML = `<i data-lucide="sliders-horizontal"></i> ${titleMap[mode] || '随机测试设置'}`;
-    modal.querySelector('input[name="random-test-source"][value="all"]').checked = true;
+    const titleEl = document.getElementById('random-test-title');
+    if (titleEl) {
+        titleEl.innerHTML = `<i data-lucide="sliders-horizontal"></i> ${titleMap[mode] || '随机测试设置'}`;
+        renderIcons(titleEl);
+    }
+
+    const sourceInput = modal.querySelector(`input[name="random-test-source"][value="${randomTestState.source}"]`);
+    if (sourceInput) sourceInput.checked = true;
+
+    renderRandomTestCountOptions();
     renderRandomTestChapters();
     updateRandomTestSummary();
-    modal.style.display = 'block';
+    openModal('random-test-modal');
 }
 
 function closeRandomTestSetup() {
-    const modal = document.getElementById('random-test-modal');
-    if (modal) modal.style.display = 'none';
+    closeModal('random-test-modal');
 }
 
 function startConfiguredRandomTest() {
     if (getSelectedChapters().length === 0) {
-        alert('请至少选择一个章节！');
+        showToast('请至少选择一个章节。', 'warning');
         return;
     }
     closeRandomTestSetup();
@@ -205,12 +285,14 @@ function startConfiguredRandomTest() {
         startMockExam({
             mcqPool: buildQuestionPool('mcq'),
             tfPool: buildQuestionPool('tf'),
+            preset: randomTestState.examPreset,
             titleSuffix: `｜${getRandomSourceLabel()}｜${getSelectedChapters().length}章`
         });
         return;
     }
     startOverallTest(randomTestState.mode, {
         questionPool: buildQuestionPool(randomTestState.mode),
+        numQuestions: randomTestState.questionCount,
         titleSuffix: `｜${getRandomSourceLabel()}｜${getSelectedChapters().length}章`
     });
 }
@@ -218,21 +300,24 @@ function startConfiguredRandomTest() {
 export function startChapterTest(chapterName) {
     const chapterData = state.all_data[chapterName];
     if (!chapterData || (chapterData.mcq.length === 0 && chapterData.tf.length === 0)) {
-        alert('该章节没有题目可供测试！'); return;
+        showToast('该章节没有题目可供测试。', 'warning');
+        return;
     }
     startQuiz([...chapterData.mcq, ...chapterData.tf], 0, `${chapterName} - 随机测试`);
 }
 
 export function startOverallTest(type, options = {}) {
-    const questionPool = options.questionPool || (type === 'mcq' ? window.mcq_data : window.tf_data);
+    const questionPool = options.questionPool || (type === 'mcq' ? (globalThis.mcq_data || []) : (globalThis.tf_data || []));
     const title = type === 'mcq' ? '选择题随机测试' : '判断题随机测试';
-    startQuiz(questionPool, 20, `${title}${options.titleSuffix || ''}`);
+    const numQuestions = typeof options.numQuestions === 'number' ? options.numQuestions : 20;
+    startQuiz(questionPool, numQuestions, `${title}${options.titleSuffix || ''}`);
 }
 
 export function startAllWrongAnswersTest() {
     const allWrongQids = getWrongAnswerQids();
     if (allWrongQids.length === 0) {
-        alert('您的错题本是空的，无法开始测试！'); return;
+        showToast('您的错题本是空的，无法开始测试。', 'info');
+        return;
     }
     const questionPool = allWrongQids.map(qid => state.question_lookup[qid]).filter(Boolean);
     startQuiz(questionPool, 0, '所有错题随机测试');
@@ -242,7 +327,8 @@ export function startCurrentChapterWrongAnswersTest() {
     if (!state.activeChapter) return;
     const chapterWrongQids = getWrongAnswerQids(state.activeChapter);
     if (chapterWrongQids.length === 0) {
-        alert('本章没有错题，无法开始测试！'); return;
+        showToast('本章没有错题，无法开始测试。', 'info');
+        return;
     }
     const questionPool = chapterWrongQids.map(qid => state.question_lookup[qid]).filter(Boolean);
     startQuiz(questionPool, 0, `【${state.activeChapter}】错题测试`);
@@ -250,85 +336,132 @@ export function startCurrentChapterWrongAnswersTest() {
 
 export function startLastWrongQuizTest() {
     if (!state.lastWrongQuizQuestions.length) {
-        alert('本次测试没有错题可重练！'); return;
+        showToast('本次测试没有错题可重练。', 'info');
+        return;
     }
     startQuiz(state.lastWrongQuizQuestions, 0, '本次错题重练');
 }
 
 export function startMockExam(options = {}) {
-    const mcqPool = options.mcqPool || window.mcq_data;
-    const tfPool = options.tfPool || window.tf_data;
-    const mcqs = shuffleQuestions(mcqPool).slice(0, 30);
-    const tfs = shuffleQuestions(tfPool).slice(0, 20);
+    const mcqPool = options.mcqPool || globalThis.mcq_data || [];
+    const tfPool = options.tfPool || globalThis.tf_data || [];
+    const preset = options.preset || 'standard';
+
+    const presetLimits = {
+        standard: { mcq: 30, tf: 20, minutes: 20, label: '模拟考试 (20分钟)' },
+        quick: { mcq: 15, tf: 10, minutes: 10, label: '快速模拟 (10分钟)' },
+        full: { mcq: mcqPool.length, tf: tfPool.length, minutes: 0, label: '全量模拟测试' }
+    };
+    const cfg = presetLimits[preset] || presetLimits.standard;
+
+    const mcqs = shuffleQuestions(mcqPool).slice(0, cfg.mcq);
+    const tfs = shuffleQuestions(tfPool).slice(0, cfg.tf);
     const questions = shuffleQuestions([...mcqs, ...tfs]);
     if (questions.length === 0) {
-        alert('没有符合当前筛选条件的题目，无法开始测试！');
+        showToast('没有符合当前筛选条件的题目，无法开始测试。', 'warning');
         return;
     }
-    
-    startQuiz(questions, questions.length, `模拟考试 (20分钟)${options.titleSuffix || ''}`);
-    
+
+    startQuiz(questions, questions.length, `${cfg.label}${options.titleSuffix || ''}`, { alreadyShuffled: true });
+
     state.quizMode = 'exam';
-    document.getElementById('quiz-timer').style.display = 'block';
-    
-    state.examTimeRemaining = 20 * 60; 
-    updateTimerDisplay();
-    
-    if (state.examTimerInterval) clearInterval(state.examTimerInterval);
-    state.examTimerInterval = setInterval(() => {
-        state.examTimeRemaining--;
+    const timerEl = document.getElementById('quiz-timer');
+    if (state.examTimerInterval) {
+        clearInterval(state.examTimerInterval);
+        state.examTimerInterval = null;
+    }
+
+    if (cfg.minutes > 0 && timerEl) {
+        timerEl.style.display = 'block';
+        state.examTimeRemaining = cfg.minutes * 60;
         updateTimerDisplay();
-        if (state.examTimeRemaining <= 0) {
-            clearInterval(state.examTimerInterval);
-            state.examTimerInterval = null;
-            alert('考试时间到！即将提交试卷。');
-            showQuizResults(); 
-        }
-    }, 1000);
+
+        state.examTimerInterval = setInterval(() => {
+            state.examTimeRemaining--;
+            updateTimerDisplay();
+            if (state.examTimeRemaining <= 0) {
+                clearInterval(state.examTimerInterval);
+                state.examTimerInterval = null;
+                showToast('考试时间到，已自动提交试卷。', 'warning', 4500);
+                showQuizResults();
+            }
+        }, 1000);
+    }
 }
 
-export function startQuiz(questionPool, numQuestions, title) {
+export function startQuiz(questionPool, numQuestions, title, options = {}) {
     state.score = 0;
     state.currentQuestionIndex = 0;
     state.quizAnswers = [];
     state.lastWrongQuizQuestions = [];
     state.quizMode = 'practice';
     state.quizFinalized = false;
-    state.quizQuestions = [...questionPool].sort(() => 0.5 - Math.random());
-    if (numQuestions > 0 && numQuestions < state.quizQuestions.length) {
-        state.quizQuestions = state.quizQuestions.slice(0, numQuestions);
-    }
+
+    const shuffled = options.alreadyShuffled ? [...questionPool] : shuffleQuestions(questionPool);
+    state.quizQuestions = (numQuestions > 0 && numQuestions < shuffled.length)
+        ? shuffled.slice(0, numQuestions)
+        : shuffled;
     state.quizLength = state.quizQuestions.length;
 
-    if (state.quizLength === 0) { alert('没有可供测试的题目！'); return; }
+    if (state.quizLength === 0) {
+        showToast('没有可供测试的题目。', 'warning');
+        return;
+    }
+
+    if (state.examTimerInterval) {
+        clearInterval(state.examTimerInterval);
+        state.examTimerInterval = null;
+    }
 
     document.getElementById('quiz-title').textContent = title;
     document.getElementById('quiz-score').style.display = 'none';
     document.getElementById('quiz-content').style.display = 'block';
-    document.getElementById('quiz-modal').style.display = 'block';
     document.getElementById('quiz-timer').style.display = 'none';
 
+    configureModal('quiz-modal', {
+        closeOnBackdrop: false,
+        onBeforeClose: async () => {
+            if (state.quizState === 'ANSWERING' || state.quizState === 'FEEDBACK') {
+                return confirmDialog({
+                    title: '退出当前测试',
+                    message: '测试尚未完成，确定要提前退出吗？当前未完成部分的成绩将不会结算。',
+                    confirmText: '退出测试',
+                    cancelText: '继续答题',
+                    danger: true
+                });
+            }
+            return true;
+        },
+        onAfterClose: () => {
+            if (state.examTimerInterval) {
+                clearInterval(state.examTimerInterval);
+                state.examTimerInterval = null;
+            }
+            const timerEl = document.getElementById('quiz-timer');
+            if (timerEl) timerEl.style.display = 'none';
+            state.quizState = 'IDLE';
+        }
+    });
+
+    openModal('quiz-modal');
     displayQuizQuestion();
 }
 
 export function updateTimerDisplay() {
-    const m = Math.floor(state.examTimeRemaining / 60).toString().padStart(2, '0');
-    const s = (state.examTimeRemaining % 60).toString().padStart(2, '0');
+    const m = Math.floor(Math.max(0, state.examTimeRemaining) / 60).toString().padStart(2, '0');
+    const s = (Math.max(0, state.examTimeRemaining) % 60).toString().padStart(2, '0');
     const timerEl = document.getElementById('quiz-timer');
+    if (!timerEl) return;
     timerEl.textContent = `${m}:${s}`;
-    if (state.examTimeRemaining < 60) {
-        timerEl.style.color = 'var(--error)';
-    } else {
-        timerEl.style.color = 'var(--primary)';
-    }
+    timerEl.style.color = state.examTimeRemaining < 60 ? 'var(--error)' : 'var(--primary)';
 }
 
-export function closeQuiz() {
-    document.getElementById('quiz-modal').style.display = 'none';
-    document.getElementById('quiz-timer').style.display = 'none';
-    if (state.examTimerInterval) clearInterval(state.examTimerInterval);
-    state.examTimerInterval = null;
-    state.quizState = 'IDLE';
+export function closeQuiz(force = false) {
+    if (force) {
+        closeModal('quiz-modal');
+        return;
+    }
+    requestCloseModal('quiz-modal');
 }
 
 export function displayQuizQuestion() {
@@ -336,32 +469,37 @@ export function displayQuizQuestion() {
         const question = state.quizQuestions[state.currentQuestionIndex];
         const questionContainer = document.getElementById('quiz-question-container');
         const instructionsEl = document.getElementById('keyboard-instructions');
-        
-        instructionsEl.textContent = question.type === 'mcq' ? 
-            '提示：使用键盘 A/B/C/D 或 1/2/3/4 选择，Enter 提交答案、下一题，Space跳过。' : 
-            '提示：使用键盘 T/1(对) / F/2(错) 选择，Enter 提交答案、下一题，Space跳过。';
 
-        document.getElementById('quiz-question-text').innerHTML = question.question.replace(/(\(|\（)\s*(\)|\）)/, ' (   ) ');
+        instructionsEl.textContent = question.type === 'mcq'
+            ? '提示：使用键盘 A/B/C/D 或 1/2/3/4 选择，Enter 提交答案/下一题，Space 跳过。'
+            : '提示：使用键盘 T/1(对) / F/2(错) 选择，Enter 提交答案/下一题，Space 跳过。';
+
+        document.getElementById('quiz-question-text').innerHTML = formatInlineHtml(question.question);
         const optionsContainer = document.getElementById('quiz-options');
         optionsContainer.innerHTML = '';
 
         const favBtn = document.getElementById('quiz-favorite-btn');
-        favBtn.style.display = 'inline-block';
-        favBtn.className = `action-button favorite-button ${state.favorites.includes(question.qid) ? 'favorited' : ''}`;
-        favBtn.innerHTML = state.favorites.includes(question.qid) ? '<i data-lucide="star"></i> 已收藏' : '<i data-lucide="star"></i> 收藏';
+        const isFav = state.favorites.includes(question.qid);
+        favBtn.style.display = 'inline-flex';
+        favBtn.className = `action-button favorite-button ${isFav ? 'favorited' : ''}`;
+        favBtn.innerHTML = isFav ? '<i data-lucide="star"></i> 已收藏' : '<i data-lucide="star"></i> 收藏';
         favBtn.dataset.qid = question.qid;
-        favBtn.dataset.action = "toggleFavorite";
+        favBtn.dataset.action = 'toggleFavorite';
+        renderIcons(favBtn);
 
         if (question.type === 'mcq') {
-            question.options.forEach(option => {
+            (question.options || []).forEach(rawOption => {
+                const { key, text } = parseMcqOption(rawOption);
                 const label = document.createElement('label');
                 label.className = 'quiz-option-item';
-                const key = option.charAt(0);
-                const text = option.replace(/^[A-Za-z][\.\、\s]*/, '');
-                const radio = Object.assign(document.createElement('input'), { type: 'radio', name: 'quizOption', value: key });
+                const radio = Object.assign(document.createElement('input'), {
+                    type: 'radio',
+                    name: 'quizOption',
+                    value: key
+                });
                 label.innerHTML = `
-                    <span class="quiz-option-key">${key}</span>
-                    <span class="quiz-option-text">${text}</span>
+                    <span class="quiz-option-key">${escapeHtml(key)}</span>
+                    <span class="quiz-option-text">${formatInlineHtml(text)}</span>
                 `;
                 label.prepend(radio);
                 optionsContainer.appendChild(label);
@@ -369,7 +507,11 @@ export function displayQuizQuestion() {
         } else {
             const labelTrue = document.createElement('label');
             labelTrue.className = 'quiz-option-item quiz-option-tf';
-            const radioTrue = Object.assign(document.createElement('input'), { type: 'radio', name: 'quizOption', value: '✓' });
+            const radioTrue = Object.assign(document.createElement('input'), {
+                type: 'radio',
+                name: 'quizOption',
+                value: '✓'
+            });
             labelTrue.innerHTML = `
                 <span class="quiz-option-key"><i data-lucide="check"></i></span>
                 <span class="quiz-option-text">正确</span>
@@ -378,7 +520,11 @@ export function displayQuizQuestion() {
 
             const labelFalse = document.createElement('label');
             labelFalse.className = 'quiz-option-item quiz-option-tf';
-            const radioFalse = Object.assign(document.createElement('input'), { type: 'radio', name: 'quizOption', value: '×' });
+            const radioFalse = Object.assign(document.createElement('input'), {
+                type: 'radio',
+                name: 'quizOption',
+                value: '×'
+            });
             labelFalse.innerHTML = `
                 <span class="quiz-option-key"><i data-lucide="x"></i></span>
                 <span class="quiz-option-text">错误</span>
@@ -387,35 +533,44 @@ export function displayQuizQuestion() {
 
             optionsContainer.appendChild(labelTrue);
             optionsContainer.appendChild(labelFalse);
+            renderIcons(optionsContainer);
         }
 
         document.getElementById('quiz-progress').textContent = `进度: ${state.currentQuestionIndex + 1} / ${state.quizLength}`;
         document.getElementById('quiz-feedback').style.display = 'none';
-        document.getElementById('submit-answer-btn').style.display = 'inline-block';
+        document.getElementById('submit-answer-btn').style.display = 'inline-flex';
         document.getElementById('next-question-btn').style.display = 'none';
-        
+
         typesetMath([questionContainer]);
-        
+
         state.quizState = 'ANSWERING';
         state.quizFinalized = false;
-
     } else {
         showQuizResults();
     }
 }
 
 export function submitQuizAnswer(skipped = false) {
-    if (state.quizFinalized) return;
+    if (state.quizFinalized || state.quizState !== 'ANSWERING') return;
+
     let userAnswer = null;
     if (!skipped) {
         const selectedOption = document.querySelector('input[name="quizOption"]:checked');
-        if (!selectedOption) { alert('请先选择一个答案！'); return; }
+        if (!selectedOption) {
+            showToast('请先选择一个答案。', 'warning');
+            return;
+        }
         userAnswer = selectedOption.value;
     }
-    
+
     const question = state.quizQuestions[state.currentQuestionIndex];
-    const isCorrect = !skipped && (userAnswer === question.answer);
-    const answerRecord = {
+    if (!question) return;
+
+    const normalizedCorrect = String(question.answer || '').trim().toUpperCase();
+    const normalizedUser = skipped ? '' : String(userAnswer || '').trim().toUpperCase();
+    const isCorrect = !skipped && (normalizedUser === normalizedCorrect);
+
+    state.quizAnswers[state.currentQuestionIndex] = {
         qid: question.qid,
         userAnswer: skipped ? '跳过' : userAnswer,
         correctAnswer: question.answer,
@@ -424,42 +579,35 @@ export function submitQuizAnswer(skipped = false) {
         chapter: question.chapter,
         type: question.type
     };
-    state.quizAnswers[state.currentQuestionIndex] = answerRecord;
-    
+
     updateStats(question, isCorrect);
 
     if (isCorrect) {
         state.score++;
         recordCorrectPractice(question);
     } else {
-        recordWrongAnswer(question, document.getElementById('quiz-title').textContent || 'quiz');
+        recordWrongAnswer(question, document.getElementById('quiz-title')?.textContent || 'quiz');
         updateChapterNavStatus();
     }
 
     const feedbackEl = document.getElementById('quiz-feedback');
     feedbackEl.className = isCorrect ? 'correct' : 'incorrect';
-    let explanationText = question.explanation || '暂无解析';
-    if (typeof marked !== 'undefined' && marked.parse) {
-        explanationText = marked.parse(explanationText);
-    }
-    if (typeof DOMPurify !== 'undefined') {
-        explanationText = DOMPurify.sanitize(explanationText);
-    }
-    
+    const explanationHtml = renderMarkdown(question.explanation || '暂无解析');
     const feedbackPrefix = isCorrect ? '回答正确！' : (skipped ? '已跳过。' : '回答错误。');
-    feedbackEl.innerHTML = `${feedbackPrefix}${isCorrect ? '' : `正确答案是：${question.answer}`}` + 
-        `<br><br><div class="explanation-span">解析：${explanationText}</div>`;
+    const answerHint = isCorrect ? '' : `正确答案是：<strong>${escapeHtml(question.answer)}</strong>`;
+
+    feedbackEl.innerHTML = `${feedbackPrefix}${answerHint}<div class="explanation-span">解析：${explanationHtml}</div>`;
     feedbackEl.style.display = 'block';
 
     typesetMath([feedbackEl]);
 
     document.getElementById('submit-answer-btn').style.display = 'none';
-    document.getElementById('next-question-btn').style.display = 'inline-block';
-    
+    document.getElementById('next-question-btn').style.display = 'inline-flex';
     state.quizState = 'FEEDBACK';
 }
 
 export function nextQuizQuestion() {
+    if (state.quizState !== 'FEEDBACK') return;
     state.currentQuestionIndex++;
     displayQuizQuestion();
 }
@@ -475,6 +623,7 @@ export function showQuizResults() {
     document.getElementById('quiz-content').style.display = 'none';
     const scoreEl = document.getElementById('quiz-score');
     scoreEl.style.display = 'block';
+
     state.lastWrongQuizQuestions = state.quizQuestions
         .map((question, index) => {
             const answer = state.quizAnswers[index];
@@ -489,35 +638,33 @@ export function showQuizResults() {
             isCorrect: false,
             skipped: true
         };
-        let explanationText = question.explanation || '暂无解析';
-        if (typeof marked !== 'undefined' && marked.parse) {
-            explanationText = marked.parse(explanationText);
-        }
-        if (typeof DOMPurify !== 'undefined') {
-            explanationText = DOMPurify.sanitize(explanationText);
-        }
+        const explanationHtml = renderMarkdown(question.explanation || '暂无解析');
+        const optionsMarkup = question.type === 'mcq'
+            ? `<ul>${(question.options || []).map(option => `<li>${formatInlineHtml(option)}</li>`).join('')}</ul>`
+            : '';
+
         return `
             <details class="quiz-review-item ${answer.isCorrect ? 'is-correct' : 'is-wrong'}">
                 <summary>
                     <span>第 ${index + 1} 题</span>
                     <strong>${answer.isCorrect ? '正确' : (answer.skipped ? '跳过' : '错误')}</strong>
                 </summary>
-                <p>${question.question.replace(/(\(|\（)\s*(\)|\）)/, ' (   ) ')}</p>
-                ${question.type === 'mcq' ? `<ul>${question.options.map(option => `<li>${option}</li>`).join('')}</ul>` : ''}
+                <p>${formatInlineHtml(question.question)}</p>
+                ${optionsMarkup}
                 <div class="quiz-review-answer">
-                    <span>你的答案：${answer.userAnswer}</span>
-                    <span>正确答案：${question.answer}</span>
+                    <span>你的答案：${escapeHtml(answer.userAnswer)}</span>
+                    <span>正确答案：${escapeHtml(question.answer)}</span>
                 </div>
-                <div class="explanation-span"><b>解析：</b>${explanationText}</div>
+                <div class="explanation-span"><b>解析：</b>${explanationHtml}</div>
             </details>
         `;
     }).join('');
 
     const wrongRetryButton = state.lastWrongQuizQuestions.length > 0
-        ? '<button class="quiz-button" data-action="startLastWrongQuizTest"><i data-lucide="rotate-cw"></i> 重练本次错题</button>'
+        ? '<button type="button" class="quiz-button" data-action="startLastWrongQuizTest"><i data-lucide="rotate-cw"></i> 重练本次错题</button>'
         : '';
 
-    const accuracyPct = Math.round((state.score / state.quizLength) * 100);
+    const accuracyPct = state.quizLength > 0 ? Math.round((state.score / state.quizLength) * 100) : 0;
     const gradeLevel = accuracyPct >= 90 ? '掌握熟练' : (accuracyPct >= 60 ? '达到及格' : '建议巩固');
 
     scoreEl.innerHTML = `
@@ -541,13 +688,25 @@ export function showQuizResults() {
         </div>
         <div class="quiz-result-actions">
             ${wrongRetryButton}
-            <button class="action-button quiz-button-close" data-action="closeQuiz"><i data-lucide="check"></i> 完成并退出</button>
+            <button type="button" class="action-button quiz-button-close" data-action="closeQuiz"><i data-lucide="check"></i> 完成并退出</button>
         </div>
         <div class="quiz-review-heading">
             <h4><i data-lucide="file-text"></i> 答题详情与解析</h4>
         </div>
         <div class="quiz-review-list">${reviewItems}</div>
     `;
+
+    renderIcons(scoreEl);
     typesetMath([scoreEl]);
+
+    // 折叠详情展开时补排公式，防止隐藏状态下 MathJax 计算宽高异常
+    scoreEl.querySelectorAll('.quiz-review-item').forEach(detail => {
+        detail.addEventListener('toggle', () => {
+            if (detail.open) {
+                typesetMath([detail]);
+            }
+        }, { once: true });
+    });
+
     state.quizState = 'IDLE';
 }

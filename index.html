@@ -4,9 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>机械设计基础 | 课程题库与自测</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20261026-clean">
-    <link rel="alternate icon" href="favicon.svg?v=20261026-clean">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" href="favicon.svg">
     <script>
+        (function () {
+            try {
+                if (localStorage.getItem('mech_design_theme') === 'dark') {
+                    document.documentElement.classList.add('dark-mode');
+                }
+                var fontScale = localStorage.getItem('mech_design_font_scale');
+                if (fontScale === 'large' || fontScale === 'xlarge' || fontScale === 'standard') {
+                    document.documentElement.dataset.fontScale = fontScale;
+                }
+            } catch (err) {
+                // 忽略隐私模式下访问 localStorage 的异常
+            }
+        })();
         MathJax = {
           tex: {
             inlineMath: [['$', '$'], ['\\(', '\\)']]
@@ -16,24 +29,18 @@
           }
         };
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" crossorigin="anonymous"></script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer crossorigin="anonymous"></script>
     
-    <link href="https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
-    <script src="https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-    
-    <link rel="stylesheet" href="styles.css?v=20261026-clean">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-
-<button id="menu-toggle" type="button" aria-label="打开导航" title="打开导航"><i data-lucide="menu"></i></button>
 
 <div id="sidebar">
     <button id="sidebar-close" type="button" aria-label="关闭导航" title="关闭导航"><i data-lucide="x"></i></button>
@@ -49,6 +56,14 @@
             <span class="slider"></span>
         </label>
     </div>
+    <div class="font-size-control" role="group" aria-label="正文字号调节">
+        <span>正文字号</span>
+        <div class="font-size-segmented">
+            <button type="button" data-font-scale="standard" aria-pressed="true">标准</button>
+            <button type="button" data-font-scale="large" aria-pressed="false">较大</button>
+            <button type="button" data-font-scale="xlarge" aria-pressed="false">大字</button>
+        </div>
+    </div>
     <div class="sidebar-section search-sidebar-section">
         <h4>检索</h4>
         <button class="sidebar-button search-launch-button" data-action="openSearchModal">
@@ -63,10 +78,10 @@
     </div>
     <div class="sidebar-section">
         <h4>学习与管理</h4>
-        <button class="sidebar-button" data-action="showDashboard"><i data-lucide="chart-no-axes-combined"></i> 学习统计</button>
-        <button class="sidebar-button fav" data-action="showAllFavorites"><i data-lucide="star"></i> 我的收藏</button>
-        <button class="sidebar-button wrong" data-action="showAllWrongAnswers"><i data-lucide="book-open-check"></i> 错题汇总</button>
-        <button class="sidebar-button" data-action="showQuestionEditManager"><i data-lucide="file-pen-line"></i> 题目修订/录入</button>
+        <button class="sidebar-button" type="button" data-action="showDashboard"><i data-lucide="chart-no-axes-combined"></i> 学习统计</button>
+        <button class="sidebar-button" type="button" data-action="showAllFavorites"><i data-lucide="star"></i> 我的收藏</button>
+        <button class="sidebar-button" type="button" data-action="showAllWrongAnswers"><i data-lucide="book-open-check"></i> 错题汇总</button>
+        <button class="sidebar-button" type="button" data-action="showQuestionEditManager"><i data-lucide="file-pen-line"></i> 题目修订/录入</button>
         <button class="sidebar-button" data-action="showDataSync"><i data-lucide="database"></i> 数据备份</button>
         <button class="sidebar-button" data-action="triggerWallpaperUpload"><i data-lucide="image"></i> 自定义背景</button>
         <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;">
@@ -76,31 +91,42 @@
 
     <div id="main-content">
     <div class="main-container">
-        <div class="workspace-topbar">
-            <span class="workspace-path">机械设计基础 · 课程复习题库</span>
-            <div class="topbar-actions">
-                <button class="topbar-search" type="button" data-action="openSearchModal" title="搜索题库"><i data-lucide="search"></i><span>搜索题库</span><kbd>/</kbd></button>
-                <button id="notepad-toggle" class="topbar-button" type="button" aria-label="打开随手记" title="打开随手记"><i data-lucide="notebook-pen"></i><span>随手记</span></button>
+        <header class="workspace-chrome">
+            <div class="workspace-topbar">
+                <div class="topbar-leading">
+                    <button id="menu-toggle" class="topbar-icon-btn mobile-menu-btn" type="button" aria-label="打开导航" title="打开导航"><i data-lucide="menu"></i></button>
+                    <button id="sidebar-collapse-toggle" class="topbar-icon-btn" type="button" aria-label="收起左侧导航" title="收起左侧导航（专注刷题）" aria-pressed="false"><i data-lucide="panel-left-close"></i></button>
+                    <span class="workspace-path">机械设计基础 · 课程复习题库</span>
+                </div>
+                <div class="topbar-actions">
+                    <button id="chapter-drawer-toggle" class="topbar-button" type="button" aria-expanded="false" aria-controls="chapter-drawer" title="切换章节与查看本章错题"><i data-lucide="layers"></i><span>章节目录</span></button>
+                    <button class="topbar-search" type="button" data-action="openSearchModal" title="搜索题库"><i data-lucide="search"></i><span>搜索题库</span><kbd>/</kbd></button>
+                    <button id="notepad-toggle" class="topbar-button" type="button" aria-label="打开随手记" title="打开随手记"><i data-lucide="notebook-pen"></i><span>随手记</span></button>
+                </div>
             </div>
-        </div>
-        <h1 id="main-title">机械设计基础</h1>
 
-        <div id="global-controls">
-             <button id="test-all-wrong-btn" style="display:none;"><i data-lucide="flask-conical"></i> 所有错题随机测试</button>
-             <button id="clear-all-wrong-answers-btn" style="display:none;"><i data-lucide="trash-2"></i> 清空所有错题</button>
-             
-             <button id="test-chapter-wrong-btn">本章错题随机测试</button>
-             <button id="clear-chapter-wrong-answers-btn">清空本章错题</button>
-             <button id="toggle-favorites-btn">只显示收藏</button>
-             <button id="toggle-all-answers-btn">显示全部答案</button>
-        </div>
+            <div id="global-controls">
+                 <button id="test-all-wrong-btn" type="button" style="display:none;"><i data-lucide="flask-conical"></i> 所有错题随机测试</button>
+                 <button id="test-chapter-wrong-btn" type="button">本章错题随机测试</button>
+                 <button id="toggle-pending-wrong-btn" type="button" style="display:none;" aria-pressed="false">只看未掌握</button>
+                 <button id="toggle-favorites-btn" type="button">只显示收藏</button>
+                 <button id="toggle-all-answers-btn" type="button">显示全部答案</button>
+                 <button id="toggle-practice-track-btn" type="button" style="display:none;" aria-pressed="true">练习记录进度：开</button>
+                 <button id="clear-chapter-wrong-answers-btn" type="button">清空本章错题</button>
+                 <button id="clear-all-wrong-answers-btn" type="button" style="display:none;"><i data-lucide="trash-2"></i> 清空所有错题</button>
+            </div>
+        </header>
+        <h1 id="main-title">机械设计基础</h1>
         <div class="study-layout">
             <div class="study-content">
                 <div id="content-area"></div>
                 <div id="welcome-message"></div>
             </div>
-            <aside class="chapter-rail" aria-label="章节列表">
-                <div class="chapter-rail-header"><h2>章节目录</h2></div>
+            <aside id="chapter-drawer" class="chapter-rail" aria-label="章节列表">
+                <div class="chapter-rail-header">
+                    <h2><i data-lucide="layers"></i> 章节目录</h2>
+                    <button type="button" id="close-chapter-drawer" class="close-drawer-btn" aria-label="关闭章节目录" title="关闭"><i data-lucide="x"></i></button>
+                </div>
                 <nav id="chapter-nav-list" aria-label="章节练习导航"></nav>
             </aside>
         </div>
@@ -139,6 +165,10 @@
             <label class="form-field">
                 <span>答案</span>
                 <input id="question-entry-answer" type="text" autocomplete="off" placeholder="选择题如 A；判断题如 ✓ 或 ×">
+                <div id="question-entry-tf-picker" class="tf-answer-picker" style="display:none;">
+                    <button type="button" data-tf-value="✓"><i data-lucide="check"></i> 正确 (✓)</button>
+                    <button type="button" data-tf-value="×"><i data-lucide="x"></i> 错误 (×)</button>
+                </div>
             </label>
             <label class="form-field">
                 <span>解析</span>
@@ -170,6 +200,10 @@
             <label class="form-field">
                 <span>答案</span>
                 <input id="question-edit-answer" type="text" autocomplete="off">
+                <div id="question-edit-tf-picker" class="tf-answer-picker" style="display:none;">
+                    <button type="button" data-tf-value="✓"><i data-lucide="check"></i> 正确 (✓)</button>
+                    <button type="button" data-tf-value="×"><i data-lucide="x"></i> 错误 (×)</button>
+                </div>
             </label>
             <label class="form-field">
                 <span>解析</span>
@@ -187,7 +221,7 @@
     <div class="modal-content question-edit-manager-panel">
         <button class="close-modal" type="button" id="close-question-edit-manager" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2><i data-lucide="file-pen-line"></i> 题目修订/录入</h2>
-        <p class="modal-subtitle">本地修订和新增题不会自动写入仓库。确认无误后，请提交 GitHub Issue 申请同步到 <code>question.json</code>。</p>
+        <p class="modal-subtitle">本地修订和新增题不会自动写入仓库。确认无误后，请提交 GitHub Issue 申请同步到 <code>questions.js</code>。</p>
         <div id="question-edit-summary" class="edit-sync-summary"></div>
         <div id="question-edit-list" class="question-edit-list"></div>
         <div class="question-sync-actions">
@@ -204,7 +238,7 @@
         <h2><i data-lucide="info"></i> 题库说明</h2>
         <div class="notice-copy">
             <p>本站题库可能与最新题库有出入，请以课堂、老师发布材料和最新版题库为准。</p>
-            <p>此外，我去年拿到的题库中存在一些错误，本站已人工修正过部分题目的答案。现在新增了题目编辑和录入功能，你可以先在本地修订或新增题目，再申请同步到仓库的 <code>question.json</code>。</p>
+            <p>此外，我去年拿到的题库中存在一些错误，本站已人工修正过部分题目的答案。现在新增了题目编辑和录入功能，你可以先在本地修订或新增题目，再申请同步到仓库的 <code>questions.js</code>。</p>
         </div>
         <div class="question-notice-actions">
             <button class="quiz-button" id="btn-confirm-question-notice"><i data-lucide="check"></i> 我知道了</button>
@@ -251,7 +285,7 @@
 
 <div id="right-sidebar">
     <div class="notepad-head">
-        <h3 class="sidebar-title"><i data-lucide="notebook-pen"></i> 随手记</h3>
+        <h3><i data-lucide="notebook-pen"></i> 随手记</h3>
         <button id="close-notepad" type="button" aria-label="关闭随手记" title="关闭随手记"><i data-lucide="x"></i></button>
     </div>
     <div class="notepad-container">
@@ -282,7 +316,7 @@
                     <tr>
                         <th style="text-align:left;">章节</th>
                         <th style="width:120px;">进度</th>
-                        <th style="width:90px; text-align:right;">正确率</th>
+                        <th style="width:106px; text-align:right;">正确率</th>
                     </tr>
                 </thead>
                 <tbody id="stats-table-body"></tbody>
@@ -350,7 +384,9 @@
     </div>
 </div>
 
+<button id="back-to-top-btn" class="back-to-top-btn" type="button" aria-label="回到顶部" title="回到顶部"><i data-lucide="arrow-up"></i></button>
+
 <script src="questions.js"></script>
-<script type="module" src="app.js?v=20261026-clean"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

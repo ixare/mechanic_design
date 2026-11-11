@@ -159,7 +159,7 @@ export function initMechanismCanvas() {
     let visible = true;
 
     function getPalette() {
-        const isDark = document.body.classList.contains('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
         if (isDark) {
             return {
                 bg: '#161a1f',
@@ -328,6 +328,13 @@ export function initMechanismCanvas() {
                     targetVelocity = 0.009;
                 }
             }
+            if (reducedMotion && Math.abs(velocity) < 1e-4 && Math.abs(targetVelocity) < 1e-4) {
+                velocity = 0;
+                targetVelocity = 0;
+                draw();
+                frame = 0;
+                return;
+            }
         }
 
         draw();
@@ -335,6 +342,10 @@ export function initMechanismCanvas() {
     }
 
     function start() {
+        if (reducedMotion && !active && Math.abs(velocity) < 1e-4) {
+            draw();
+            return;
+        }
         if (!frame && visible && !document.hidden) {
             frame = requestAnimationFrame(tick);
         }
@@ -370,6 +381,15 @@ export function initMechanismCanvas() {
         start();
     }
 
+    const handleVisibilityChange = () => {
+        if (document.hidden && frame) {
+            cancelAnimationFrame(frame);
+            frame = 0;
+        } else if (!document.hidden && visible) {
+            start();
+        }
+    };
+
     const resizeObserver = new ResizeObserver(resize);
     const intersectionObserver = new IntersectionObserver(entries => {
         visible = entries[0].isIntersecting;
@@ -384,6 +404,8 @@ export function initMechanismCanvas() {
     resizeObserver.observe(canvas);
     intersectionObserver.observe(canvas);
     themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     canvas.addEventListener('pointerdown', pointerDown);
     canvas.addEventListener('pointermove', pointerMove);
     canvas.addEventListener('pointerup', pointerUp);
@@ -396,6 +418,7 @@ export function initMechanismCanvas() {
         resizeObserver.disconnect();
         intersectionObserver.disconnect();
         themeObserver.disconnect();
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         canvas.removeEventListener('pointerdown', pointerDown);
         canvas.removeEventListener('pointermove', pointerMove);
         canvas.removeEventListener('pointerup', pointerUp);

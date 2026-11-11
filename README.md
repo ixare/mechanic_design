@@ -39,33 +39,38 @@
 
 ## 🛠️ 技术栈
 
-本项目是一个纯前端静态应用。
+本项目是一个零构建的纯前端静态应用（ES6 Modules）。
 
-- **核心**: HTML5, CSS3, ES6+ Module (拆分架构: state.js / storage.js / ui.js / quiz.js)
+- **核心**: HTML5, CSS3, ES6+ Modules（`state.js` / `storage.js` / `questionEdits.js` / `questionRenderer.js` / `quiz.js` / `ui.js` / `home.js` / `dashboard.js` / `wallpaper.js` / `wallpaperStore.js` / `feedback.js` / `modal.js` / `mechanism.js` / `questionEditUI.js` / `icons.js` / `utils.js`）
 - **图标**: Lucide
-- **字体**: Google Fonts (Barlow Condensed, IBM Plex Sans, Noto Sans SC)
+- **字体**: Google Fonts (IBM Plex Sans, JetBrains Mono, Noto Sans SC)
 - **数学渲染**: MathJax
 - **Markdown 渲染**: Marked.js
 - **安全过滤**: DOMPurify
-- **图片裁剪**: Cropper.js
+- **图片裁剪**: Cropper.js（按需加载）
 
 ## 🚀 本地运行
 
-无需复杂的安装过程，只需通过静态服务器即刻运行。
+无需复杂的安装或构建过程，只需通过本地静态 HTTP 服务器即可运行。
 
 1. **克隆项目**
    ```bash
    git clone https://github.com/ixare/mechanic_design.git
    ```
 
-2. **运行 (推荐搭载 Local Server)**
-   > **⚠️ 注意**：由于项目底层已重构为 ES6 Modules 构建规范（`<script type="module">`），为了避免出现浏览器的 CORS（跨域）预检拦截协议栈策略，**本应用必须在 HTTP 协议下运行**，而不能直接双击用本地 `file://` 协议代开文件。
-   - 方式一：使用 VS Code 的 **Live Server** 插件右键 `index.html` 打开。
-   - 方式二：使用 Python 快速启动：
+2. **运行（必须通过 HTTP 协议启动）**
+   > **⚠️ 注意**：由于项目采用原生 ES6 Modules（`<script type="module">`），浏览器的 CORS 安全策略不允许在 `file://` 协议下加载模块脚本，因此请勿直接双击打开 `index.html` 文件。
+   - 方式一：使用 VS Code 的 **Live Server** 插件右键 `index.html` 启动。
+   - 方式二：使用 Python 快速启动本地服务：
      ```bash
      python -m http.server
      ```
-   - 方式三：直接在浏览器中打开 `index.html` (部分功能如图片裁剪可能会受浏览器安全策略限制，建议使用本地服务器)。
+
+3. **题库校验与单元测试（需要 Node.js）**
+   ```bash
+   node scripts/validate-questions.mjs
+   node --test tests/*.test.mjs
+   ```
 
 
 ## 📝 待办事项 / 开发计划

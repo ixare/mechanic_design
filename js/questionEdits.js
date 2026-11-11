@@ -1,17 +1,58 @@
-import { state } from './state.js';
+import { state, updateQuestionSearchText } from './state.js';
+import {
+    copyTextToClipboard,
+    downloadBlobFile,
+    openExternalSafe,
+    parseMcqOption,
+    safeStorageSet
+} from './utils.js';
 
 export const QUESTION_EDITS_KEY = 'mech_design_question_edits';
 export const QUESTION_ADDITIONS_KEY = 'mech_design_question_additions';
 
 function cloneOptions(options) {
-    return Array.isArray(options) ? options.map(option => String(option || '')) : undefined;
+    return Array.isArray(options) ? options.map(option => String(option ?? '')) : undefined;
 }
 
 function splitOptions(optionsText) {
-    return String(optionsText || '')
+    return String(optionsText ?? '')
         .split(/\r?\n/)
         .map(option => option.trim())
         .filter(Boolean);
+}
+
+/**
+ * 规范化并校验题目答案格式（选择题匹配选项首字母；判断题统一归一化为 ✓ / ×）
+ */
+export function normalizeQuestionAnswer(type, rawAnswer, options = []) {
+    const answer = String(rawAnswer ?? '').trim();
+    if (!answer) {
+        throw new Error('题干和答案不能为空。');
+    }
+
+    if (type === 'tf') {
+        const lower = answer.toLowerCase();
+        if (['✓', '√', '对', '正确', 't', 'true', '1', 'y', 'yes'].includes(lower)) {
+            return '✓';
+        }
+        if (['×', 'x', '错', '错误', 'f', 'false', '0', 'n', 'no'].includes(lower)) {
+            return '×';
+        }
+        throw new Error('判断题答案请填写 ✓（正确）或 ×（错误）。');
+    }
+
+    if (!Array.isArray(options) || options.length < 2) {
+        throw new Error('选择题至少需要保留两个选项。');
+    }
+    const keys = options.map(opt => parseMcqOption(opt).key);
+    if (keys.some(k => !k)) {
+        throw new Error('选择题每个选项需以字母开头（如 A．...）。');
+    }
+    const upper = answer.toUpperCase();
+    if (!keys.includes(upper)) {
+        throw new Error(`选择题答案 "${answer}" 需与选项字母（${keys.join(' / ')}）一致。`);
+    }
+    return upper;
 }
 
 function getQuestionSnapshot(question) {
@@ -44,6 +85,7 @@ function applySnapshot(question, snapshot) {
     if (question.type === 'mcq' && Array.isArray(snapshot.options)) {
         question.options = cloneOptions(snapshot.options);
     }
+    updateQuestionSearchText(question);
 }
 
 function getOriginalSnapshot(qid) {
@@ -58,11 +100,11 @@ function getOriginalSnapshot(qid) {
 }
 
 function persistQuestionEdits() {
-    localStorage.setItem(QUESTION_EDITS_KEY, JSON.stringify(state.questionEdits));
+    safeStorageSet(QUESTION_EDITS_KEY, JSON.stringify(state.questionEdits));
 }
 
 function persistQuestionAdditions() {
-    localStorage.setItem(QUESTION_ADDITIONS_KEY, JSON.stringify(state.questionAdditions));
+    safeStorageSet(QUESTION_ADDITIONS_KEY, JSON.stringify(state.questionAdditions));
 }
 
 function persistQuestionChanges() {
@@ -85,25 +127,44 @@ function normalizeQuestionType(type) {
     return type === 'tf' ? 'tf' : 'mcq';
 }
 
-function normalizeQuestionAddition(raw, qid) {
+function normalizeQuestionAddition(raw, qid, strict = false) {
     if (!raw || typeof raw !== 'object') return null;
     const type = normalizeQuestionType(raw.type);
+    const chapter = String(raw.chapter || '').trim();
+    const question = String(raw.question || '').trim();
+    const explanation = String(raw.explanation || '').trim();
+    const options = type === 'mcq'
+        ? (Array.isArray(raw.options) ? splitOptions(raw.options.join('\n')) : splitOptions(raw.optionsText))
+        : undefined;
+
+    if (!qid || !chapter || !question) {
+        if (strict) throw new Error('章节、题干和答案不能为空。');
+        return null;
+    }
+
+    let answer = String(raw.answer || '').trim();
+    try {
+        answer = normalizeQuestionAnswer(type, answer, options);
+    } catch (err) {
+        if (strict) throw err;
+        // 兼容历史存储中不规范的旧数据
+        if (!answer || (type === 'mcq' && (!options || options.length === 0))) return null;
+    }
+
     const addition = {
-        chapter: String(raw.chapter || '').trim(),
+        chapter,
         type,
-        question: String(raw.question || '').trim(),
-        answer: String(raw.answer || '').trim(),
-        explanation: String(raw.explanation || '').trim(),
+        question,
+        answer,
+        explanation,
         createdAt: String(raw.createdAt || new Date().toISOString()),
         updatedAt: String(raw.updatedAt || raw.createdAt || new Date().toISOString())
     };
 
     if (type === 'mcq') {
-        addition.options = Array.isArray(raw.options) ? splitOptions(raw.options.join('\n')) : splitOptions(raw.optionsText);
+        addition.options = options;
     }
 
-    if (!qid || !addition.chapter || !addition.question || !addition.answer) return null;
-    if (type === 'mcq' && addition.options.length === 0) return null;
     return addition;
 }
 
@@ -126,7 +187,7 @@ function removeRuntimeQuestion(qid) {
         state.all_data[current.chapter][current.type] = chapterBucket.filter(question => question.qid !== qid);
     }
 
-    const source = current.type === 'mcq' ? window.mcq_data : window.tf_data;
+    const source = current.type === 'mcq' ? globalThis.mcq_data : globalThis.tf_data;
     if (Array.isArray(source)) {
         const index = source.findIndex(question => question.qid === qid);
         if (index >= 0) source.splice(index, 1);
@@ -163,12 +224,13 @@ function applyQuestionAddition(qid, addition) {
     if (normalized.type === 'mcq') {
         question.options = cloneOptions(normalized.options) || [];
     }
+    updateQuestionSearchText(question);
 
     state.all_data[normalized.chapter][normalized.type].push(question);
-    if (normalized.type === 'mcq') {
-        window.mcq_data.push(question);
-    } else {
-        window.tf_data.push(question);
+    if (normalized.type === 'mcq' && Array.isArray(globalThis.mcq_data)) {
+        globalThis.mcq_data.push(question);
+    } else if (normalized.type === 'tf' && Array.isArray(globalThis.tf_data)) {
+        globalThis.tf_data.push(question);
     }
     state.question_lookup[qid] = question;
     state.question_lookup[question.legacyQid] = question;
@@ -204,39 +266,43 @@ function saveQuestionAdditionFromEditModal(qid, values) {
         nextAddition.options = splitOptions(values.optionsText);
     }
 
-    const normalized = normalizeQuestionAddition(nextAddition, qid);
-    if (!normalized) {
-        throw new Error(current.type === 'mcq' ? '章节、题干、选项和答案不能为空。' : '章节、题干和答案不能为空。');
-    }
-
+    const normalized = normalizeQuestionAddition(nextAddition, qid, true);
     state.questionAdditions[qid] = normalized;
     applyQuestionAddition(qid, normalized);
     persistQuestionAdditions();
     return true;
 }
 
+/**
+ * 加载本地新增与修订题目（自动兼容迁移旧版文本哈希 QID）
+ */
 export function loadQuestionEdits() {
     state.questionAdditions = loadStoredObject(QUESTION_ADDITIONS_KEY);
     applyStoredQuestionAdditions();
 
-    state.questionEdits = loadStoredObject(QUESTION_EDITS_KEY);
-    Object.entries(state.questionEdits).forEach(([qid, snapshot]) => {
-        const question = state.question_lookup[qid];
-        const original = getOriginalSnapshot(qid);
+    const rawEdits = loadStoredObject(QUESTION_EDITS_KEY);
+    const migratedEdits = {};
+
+    Object.entries(rawEdits).forEach(([rawQid, snapshot]) => {
+        const canonicalQid = state.legacy_qid_lookup[rawQid] || rawQid;
+        const question = state.question_lookup[canonicalQid];
+        const original = getOriginalSnapshot(canonicalQid);
         if (!question || !original || !snapshot || typeof snapshot !== 'object') {
-            delete state.questionEdits[qid];
             return;
         }
-        applySnapshot(question, {
+        const normalizedSnapshot = {
             question: String(snapshot.question ?? original.question),
             answer: String(snapshot.answer ?? original.answer),
-            explanation: String(snapshot.explanation ?? original.explanation),
-            options: question.type === 'mcq'
-                ? cloneOptions(snapshot.options || original.options || [])
-                : undefined
-        });
+            explanation: String(snapshot.explanation ?? original.explanation)
+        };
+        if (question.type === 'mcq') {
+            normalizedSnapshot.options = cloneOptions(snapshot.options || original.options || []);
+        }
+        migratedEdits[canonicalQid] = normalizedSnapshot;
+        applySnapshot(question, normalizedSnapshot);
     });
 
+    state.questionEdits = migratedEdits;
     persistQuestionChanges();
 }
 
@@ -261,22 +327,21 @@ export function saveQuestionEdit(qid, values) {
     const original = getOriginalSnapshot(qid);
     if (!question || !original) return false;
 
+    const options = question.type === 'mcq' ? splitOptions(values.optionsText) : undefined;
+    const questionText = String(values.question || '').trim();
+    if (!questionText) {
+        throw new Error('题干和答案不能为空。');
+    }
+
+    const normalizedAnswer = normalizeQuestionAnswer(question.type, values.answer, options);
     const nextSnapshot = {
-        question: String(values.question || '').trim(),
-        answer: String(values.answer || '').trim(),
+        question: questionText,
+        answer: normalizedAnswer,
         explanation: String(values.explanation || '').trim()
     };
 
     if (question.type === 'mcq') {
-        nextSnapshot.options = splitOptions(values.optionsText);
-    }
-
-    if (!nextSnapshot.question || !nextSnapshot.answer) {
-        throw new Error('题干和答案不能为空。');
-    }
-
-    if (question.type === 'mcq' && nextSnapshot.options.length === 0) {
-        throw new Error('选择题至少需要保留一个选项。');
+        nextSnapshot.options = options;
     }
 
     if (snapshotsEqual(nextSnapshot, original)) {
@@ -306,11 +371,7 @@ export function saveQuestionAddition(values, qid = '') {
         updatedAt: now
     };
 
-    const normalized = normalizeQuestionAddition(nextAddition, targetQid);
-    if (!normalized) {
-        throw new Error(nextAddition.type === 'mcq' ? '章节、题干、选项和答案不能为空。' : '章节、题干和答案不能为空。');
-    }
-
+    const normalized = normalizeQuestionAddition(nextAddition, targetQid, true);
     state.questionAdditions[targetQid] = normalized;
     applyQuestionAddition(targetQid, normalized);
     persistQuestionAdditions();
@@ -378,7 +439,7 @@ export function getQuestionSyncPayload() {
 
     return {
         schemaVersion: 2,
-        targetFile: 'question.json',
+        targetFile: 'questions.js',
         generatedAt: new Date().toISOString(),
         changeCount: changes.length,
         updateCount: updates.length,
@@ -389,37 +450,41 @@ export function getQuestionSyncPayload() {
     };
 }
 
-function downloadJson(filename, data) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-}
-
 export function downloadQuestionSyncPayload() {
-    downloadJson(`question-sync-request-${new Date().toISOString().slice(0, 10)}.json`, getQuestionSyncPayload());
+    downloadBlobFile(
+        `question-sync-request-${new Date().toISOString().slice(0, 10)}.json`,
+        JSON.stringify(getQuestionSyncPayload(), null, 2),
+        'application/json;charset=utf-8'
+    );
 }
 
 export async function copyQuestionSyncPayload() {
     const payload = JSON.stringify(getQuestionSyncPayload(), null, 2);
-    await navigator.clipboard.writeText(payload);
+    const copied = await copyTextToClipboard(payload);
+    if (!copied) {
+        throw new Error('无法写入剪贴板');
+    }
 }
 
 export async function openQuestionSyncIssue() {
     const payload = JSON.stringify(getQuestionSyncPayload(), null, 2);
     const title = encodeURIComponent(`同步题库本地修订与新增题 ${new Date().toISOString().slice(0, 10)}`);
-    const bodyText = payload.length < 6000
-        ? `请将以下本地题目修订与新增题同步到 question.json：\n\n\`\`\`json\n${payload}\n\`\`\``
-        : `本地题目修订与新增题较多，已复制同步申请 JSON。请将该 JSON 作为 question.json 同步依据。`;
+    let bodyText;
 
-    if (payload.length >= 6000) {
-        await copyQuestionSyncPayload();
+    if (payload.length < 6000) {
+        bodyText = `请将以下本地题目修订与新增题同步到 questions.js：\n\n\`\`\`json\n${payload}\n\`\`\``;
+    } else {
+        let copied = false;
+        try {
+            await copyQuestionSyncPayload();
+            copied = true;
+        } catch (err) {
+            copied = false;
+        }
+        bodyText = copied
+            ? '本地题目修订与新增题较多，已自动复制到剪贴板，请在此粘贴同步申请 JSON 作为 questions.js 更新依据。'
+            : '本地题目修订与新增题较多，请先点击“下载同步申请”并将文件内容粘贴或附带在此 Issue 中。';
     }
 
-    window.open(`https://github.com/ixare/mechanic_design/issues/new?title=${title}&body=${encodeURIComponent(bodyText)}&labels=question-sync`, '_blank');
+    openExternalSafe(`https://github.com/ixare/mechanic_design/issues/new?title=${title}&body=${encodeURIComponent(bodyText)}&labels=question-sync`);
 }

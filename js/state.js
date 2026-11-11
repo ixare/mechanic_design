@@ -2,6 +2,7 @@ export const state = {
     all_data: {},
     question_lookup: {},
     legacy_qid_lookup: {},
+    original_question_lookup: {},
     favorites: [],
     wrongAnswersByChapter: {},
     quizQuestions: [],
@@ -12,56 +13,26 @@ export const state = {
     quizLength: 0,
     quizMode: 'practice',
     quizFinalized: false,
+    activeView: 'home',
     activeChapterButton: null,
     activeChapter: null,
     activeType: null,
     quizState: 'IDLE',
-    userStats: { total: 0, correct: 0, chapterStats: {} },
+    userStats: { total: 0, correct: 0, practicedQids: [], chapterStats: {} },
+    practiceTrackProgress: true,
     cropper: null,
     examTimerInterval: null,
     examTimeRemaining: 0,
     currentQuestionList: [],
     currentRenderOptions: {},
     questionEdits: {},
-    questionAdditions: {},
-    original_question_lookup: {}
+    questionAdditions: {}
 };
 
-function normalizeQuestionBankData(data) {
-    if (!data || typeof data !== 'object') return null;
-
-    const mcq = Array.isArray(data.mcq_data) ? data.mcq_data : data.mcq;
-    const tf = Array.isArray(data.tf_data) ? data.tf_data : data.tf;
-
-    if (!Array.isArray(mcq) && !Array.isArray(tf)) return null;
-
-    return {
-        mcq: Array.isArray(mcq) ? mcq : [],
-        tf: Array.isArray(tf) ? tf : []
-    };
-}
-
-export async function loadQuestionBank() {
-    const fallback = {
-        mcq: window.mcq_data || [],
-        tf: window.tf_data || []
-    };
-
-    try {
-        const response = await fetch('question.json', { cache: 'no-store' });
-        if (!response.ok) return fallback;
-
-        const data = await response.json();
-        const normalized = normalizeQuestionBankData(data);
-        return normalized || fallback;
-    } catch (error) {
-        console.info('question.json unavailable, falling back to questions.js');
-        return fallback;
-    }
-}
-
-function getStableQuestionId(question, type, index) {
-    if (question.id) return question.id;
+/**
+ * 计算历史版本的文本哈希 QID，用于向后迁移老用户的收藏、错题与修订记录
+ */
+export function computeLegacyTextQuestionId(question, type) {
     const chapter = question.chapter || 'unknown';
     const text = `${question.question || ''}${question.answer || ''}`.replace(/\s+/g, '');
     let hash = 0;
@@ -71,13 +42,55 @@ function getStableQuestionId(question, type, index) {
     return `${chapter}-${type}-${Math.abs(hash).toString(36)}`;
 }
 
+/**
+ * 预构建并缓存题目的检索索引文本，避免每次搜索重复拼接字符串
+ */
+export function updateQuestionSearchText(question) {
+    if (!question) return;
+    const parts = [
+        question.chapter || '',
+        question.question || '',
+        Array.isArray(question.options) ? question.options.join(' ') : '',
+        question.answer || '',
+        question.explanation || ''
+    ];
+    question._searchText = parts.join(' ').toLowerCase();
+}
+
+/**
+ * 读取本地题库数据（消除对不存在的 question.json 的无效网络请求）
+ */
+export function loadQuestionBank(customBank = null) {
+    if (customBank && (Array.isArray(customBank.mcq) || Array.isArray(customBank.tf))) {
+        return {
+            mcq: Array.isArray(customBank.mcq) ? customBank.mcq : [],
+            tf: Array.isArray(customBank.tf) ? customBank.tf : []
+        };
+    }
+
+    return {
+        mcq: Array.isArray(globalThis.mcq_data) ? globalThis.mcq_data : [],
+        tf: Array.isArray(globalThis.tf_data) ? globalThis.tf_data : []
+    };
+}
+
+function getCanonicalQuestionId(question, type, index) {
+    if (question.id && typeof question.id === 'string') {
+        return question.id;
+    }
+    const base = computeLegacyTextQuestionId(question, type);
+    return state.question_lookup[base] ? `${base}-${index}` : base;
+}
+
 function registerQuestion(question, type, index) {
-    const baseQid = getStableQuestionId(question, type, index);
-    const stableQid = state.question_lookup[baseQid] ? `${baseQid}-${index}` : baseQid;
-    const legacyQid = `${type}_${index}`;
+    const stableQid = getCanonicalQuestionId(question, type, index);
+    const legacyIndexQid = `${type}_${index}`;
+    const legacyTextQid = computeLegacyTextQuestionId(question, type);
+
     question.qid = stableQid;
-    question.legacyQid = legacyQid;
+    question.legacyQid = legacyIndexQid;
     question.type = type;
+    updateQuestionSearchText(question);
 
     if (!state.all_data[question.chapter]) {
         state.all_data[question.chapter] = { mcq: [], tf: [] };
@@ -85,8 +98,16 @@ function registerQuestion(question, type, index) {
 
     state.all_data[question.chapter][type].push(question);
     state.question_lookup[stableQid] = question;
-    state.question_lookup[legacyQid] = question;
-    state.legacy_qid_lookup[legacyQid] = stableQid;
+    state.question_lookup[legacyIndexQid] = question;
+    state.legacy_qid_lookup[legacyIndexQid] = stableQid;
+
+    if (!state.legacy_qid_lookup[legacyTextQid]) {
+        state.legacy_qid_lookup[legacyTextQid] = stableQid;
+    }
+    if (!state.question_lookup[legacyTextQid]) {
+        state.question_lookup[legacyTextQid] = question;
+    }
+
     state.original_question_lookup[stableQid] = {
         chapter: question.chapter,
         question: question.question,
@@ -97,11 +118,11 @@ function registerQuestion(question, type, index) {
     };
 }
 
+/**
+ * 解析并索引题库数据到全局状态
+ */
 export function processData(questionBank = null) {
-    const source = questionBank || {
-        mcq: window.mcq_data || [],
-        tf: window.tf_data || []
-    };
+    const source = loadQuestionBank(questionBank);
 
     state.all_data = {};
     state.question_lookup = {};
@@ -116,6 +137,6 @@ export function processData(questionBank = null) {
         registerQuestion(q, 'tf', i);
     });
 
-    window.mcq_data = source.mcq;
-    window.tf_data = source.tf;
+    globalThis.mcq_data = source.mcq;
+    globalThis.tf_data = source.tf;
 }
