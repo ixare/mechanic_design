@@ -1,0 +1,13 @@
+{
+  "name": "mechanic-design-quiz",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "机械设计基础课程题库与自测系统",
+  "scripts": {
+    "validate": "node scripts/validate-questions.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run validate && npm test",
+    "sync:apply": "node scripts/apply-question-sync.mjs"
+  }
+}

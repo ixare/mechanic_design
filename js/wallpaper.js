@@ -3,8 +3,10 @@ import { showToast } from './utils.js';
 import { closeModal, confirmDialog, openModal } from './modal.js';
 import { clearWallpaperData, loadWallpaperData, saveWallpaperData } from './wallpaperStore.js';
 
-const CROPPER_CSS_URL = 'https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.css';
-const CROPPER_JS_URL = 'https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.js';
+const CROPPER_CSS_URL = 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.css';
+const CROPPER_CSS_INTEGRITY = 'sha384-oMy41mb/qJnpJlpXOF57hSu2KGi47l/UV9+tPNrBOs7/ap5Vubj/3phrCtjutHMQ';
+const CROPPER_JS_URL = 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js';
+const CROPPER_JS_INTEGRITY = 'sha384-r+ljwOAhwY4/kdyzMnuBg7MEVoWpTMp5EYUDntB/E9qzNwL9dAEcNrb2XaV+mJc2';
 
 let currentWallpaperObjectUrl = null;
 let cropperLoadPromise = null;
@@ -25,12 +27,14 @@ function ensureCropperLoaded() {
             const link = document.createElement('link');
             link.rel = 'stylesheet';
             link.href = CROPPER_CSS_URL;
+            link.integrity = CROPPER_CSS_INTEGRITY;
             link.crossOrigin = 'anonymous';
             document.head.appendChild(link);
         }
 
         const script = document.createElement('script');
         script.src = CROPPER_JS_URL;
+        script.integrity = CROPPER_JS_INTEGRITY;
         script.crossOrigin = 'anonymous';
         script.onload = () => resolve();
         script.onerror = () => {

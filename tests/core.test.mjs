@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import vm from 'node:vm';
 import { validateQuestionBank } from '../scripts/validate-questions.mjs';
+import { applyQuestionSyncPayload } from '../scripts/apply-question-sync.mjs';
 
 function createMemoryStorage() {
     const store = new Map();
@@ -25,6 +28,7 @@ function createMemoryStorage() {
 globalThis.localStorage = createMemoryStorage();
 
 const {
+    debounce,
     formatInlineHtml,
     renderMarkdown,
     parseMcqOption,
@@ -376,4 +380,136 @@ test('UI preferences persist valid font scale, sidebar state, and last study loc
     assert.deepEqual(getLastStudyLocation(), { chapter: '第一章 绪论', type: 'mcq' });
     saveLastStudyLocation('第一章 绪论', 'invalid');
     assert.deepEqual(getLastStudyLocation(), { chapter: '第一章 绪论', type: 'mcq' });
+});
+
+test('renderMarkdown refuses raw HTML output when DOMPurify is unavailable and resists spoofed math tokens', () => {
+    const originalMarked = globalThis.marked;
+    const originalPurify = globalThis.DOMPurify;
+    try {
+        globalThis.marked = {
+            parse(input) {
+                return `<p>${input}</p>`;
+            }
+        };
+        globalThis.DOMPurify = undefined;
+
+        const rendered = renderMarkdown('测试 <img src=x onerror=alert(1)> 公式 $a<b$ 以及 MECHMATHTOKEN0END');
+        assert.ok(!rendered.includes('<img'), 'Unsafe HTML tags must be escaped when DOMPurify is missing');
+        assert.ok(rendered.includes('&lt;img src=x onerror=alert(1)&gt;'));
+        assert.ok(rendered.includes('$a&lt;b$'));
+        assert.ok(rendered.includes('MECHMATHTOKEN0END'));
+    } finally {
+        globalThis.marked = originalMarked;
+        globalThis.DOMPurify = originalPurify;
+    }
+});
+
+test('debounce supports immediate flush() and cancel()', async () => {
+    let calls = 0;
+    let lastArg = null;
+    const fn = debounce(val => {
+        calls++;
+        lastArg = val;
+    }, 60);
+
+    fn('first');
+    fn.flush();
+    assert.equal(calls, 1);
+    assert.equal(lastArg, 'first');
+
+    fn('second');
+    fn.cancel();
+    await new Promise(resolve => setTimeout(resolve, 90));
+    assert.equal(calls, 1, 'Cancelled debounced call must not execute');
+});
+
+test('discardQuestionAddition purges favorites/wrong/stats and chapter change relocates records', () => {
+    resetQuestionBank();
+    const addedQid = saveQuestionAddition({
+        chapter: '第一章 绪论',
+        type: 'mcq',
+        question: '新增本地测试题',
+        optionsText: 'A．甲\nB．乙',
+        answer: 'A',
+        explanation: '解析'
+    });
+    const addedQuestion = state.question_lookup[addedQid];
+    assert.ok(addedQuestion);
+
+    state.favorites.push(addedQid);
+    recordWrongAnswer(addedQuestion, '章节练习');
+    updateStats(addedQuestion, false);
+    assert.equal(getTotalPracticedCount(), 1);
+    assert.equal(getChapterPracticedCount('第一章 绪论'), 1);
+    assert.deepEqual(getWrongAnswerQids('第一章 绪论'), [addedQid]);
+
+    // 跨章节编辑本地新增题：错题和章节覆盖统计应同步迁移
+    saveQuestionAddition({
+        chapter: '第十章 齿轮传动',
+        type: 'mcq',
+        question: '移动章节后的本地题',
+        optionsText: 'A．甲\nB．乙',
+        answer: 'B',
+        explanation: '解析'
+    }, addedQid);
+    assert.equal(state.wrongAnswersByChapter['第一章 绪论'], undefined);
+    assert.deepEqual(getWrongAnswerQids('第十章 齿轮传动'), [addedQid]);
+    assert.equal(getChapterPracticedCount('第一章 绪论'), 0);
+    assert.equal(getChapterPracticedCount('第十章 齿轮传动'), 1);
+
+    // 删除本地新增题：收藏、错题、已练计数应同步级联清理
+    assert.equal(discardQuestionAddition(addedQid), true);
+    assert.equal(state.favorites.includes(addedQid), false);
+    assert.deepEqual(getWrongAnswerQids(), []);
+    assert.equal(getTotalPracticedCount(), 0);
+    assert.equal(getChapterPracticedCount('第十章 齿轮传动'), 0);
+});
+
+test('applyQuestionSyncPayload merges updates and additions into valid questions.js', () => {
+    const originalCode = fs.readFileSync(new URL('../questions.js', import.meta.url), 'utf8');
+    const payload = {
+        schemaVersion: 2,
+        changes: [
+            {
+                operation: 'update',
+                qid: 'mcq_ch01_001',
+                type: 'mcq',
+                chapter: '第一章 总论',
+                updated: {
+                    question: '1、构件是机械中独立的( )单元。',
+                    options: ['A．制造', 'B．运动', 'C．分析'],
+                    answer: 'B',
+                    explanation: '同步测试更新后的解析。'
+                }
+            },
+            {
+                operation: 'add',
+                qid: 'local_temp_1',
+                type: 'mcq',
+                chapter: '第一章 总论',
+                updated: {
+                    question: '13、新增同步测试题目( )。',
+                    options: ['A．选项一', 'B．选项二', 'C．选项三'],
+                    answer: 'A',
+                    explanation: '新增同步测试解析。'
+                }
+            }
+        ]
+    };
+
+    const result = applyQuestionSyncPayload(payload, originalCode);
+    assert.equal(result.appliedUpdates, 1);
+    assert.equal(result.appliedAdditions, 1);
+    assert.deepEqual(result.createdIds, ['mcq_ch01_013']);
+    assert.equal(result.mcqCount, 223);
+    assert.equal(result.tfCount, 241);
+
+    const tmpFile = path.join(os.tmpdir(), `questions-sync-test-${Date.now()}.js`);
+    fs.writeFileSync(tmpFile, result.code, 'utf8');
+    try {
+        const validation = validateQuestionBank(tmpFile);
+        assert.equal(validation.ok, true, validation.errors.join('\n'));
+    } finally {
+        fs.unlinkSync(tmpFile);
+    }
 });

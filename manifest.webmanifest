@@ -1,0 +1,18 @@
+{
+  "name": "机械设计基础 · 课程题库与自测",
+  "short_name": "机设自测",
+  "description": "浙江大学《机械设计基础》课程题库、章节练习、错题巩固与模拟考试工具",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f2",
+  "theme_color": "#25547a",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

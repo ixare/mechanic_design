@@ -78,6 +78,9 @@ export function validateQuestionBank(filePath = questionsPath) {
         if (/<script/i.test(item.explanation || '')) {
             errors.push(`${label}: explanation 包含不安全脚本标签`);
         }
+        if (/^\s*【?解析[：:]/.test(item.explanation || '')) {
+            warnings.push(`${label}: explanation 包含冗余“解析：”前缀`);
+        }
         if (!item.explanation) {
             warnings.push(`${label}: 缺少解析`);
         }
@@ -108,6 +111,9 @@ export function validateQuestionBank(filePath = questionsPath) {
 
         if (/<script/i.test(item.explanation || '')) {
             errors.push(`${label}: explanation 包含不安全脚本标签`);
+        }
+        if (/^\s*【?解析[：:]/.test(item.explanation || '')) {
+            warnings.push(`${label}: explanation 包含冗余“解析：”前缀`);
         }
     });
 

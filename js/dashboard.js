@@ -24,9 +24,11 @@ export function showDashboard() {
         statCorrectEl.style.color = rate >= 60 ? 'var(--success)' : 'var(--error)';
     }
 
+    const pendingWrong = getWrongAnswerQids(null, { status: 'pending' }).length;
     const totalWrong = getWrongAnswerQids().length;
     if (statWrongEl) {
-        statWrongEl.textContent = String(totalWrong);
+        statWrongEl.textContent = String(pendingWrong);
+        statWrongEl.title = `待复习 ${pendingWrong} 道（含已掌握共 ${totalWrong} 道）`;
     }
 
     const tbody = document.getElementById('stats-table-body');
@@ -54,13 +56,24 @@ export function showDashboard() {
                     ? Math.min(practicedUnique, totalQuestions)
                     : Math.min(stats.total, totalQuestions);
                 const completion = totalQuestions === 0 ? 0 : Math.round((practiced / totalQuestions) * 100);
-                const wrongCount = getWrongAnswerQids(chapter).length;
-                return { chapter, stats, acc, totalQuestions, practiced, completion, wrongCount };
+                const pendingWrongCount = getWrongAnswerQids(chapter, { status: 'pending' }).length;
+                const totalWrongCount = getWrongAnswerQids(chapter).length;
+                const masteredWrongCount = Math.max(0, totalWrongCount - pendingWrongCount);
+                return {
+                    chapter,
+                    stats,
+                    acc,
+                    totalQuestions,
+                    practiced,
+                    completion,
+                    pendingWrongCount,
+                    masteredWrongCount
+                };
             });
 
         const weakChapters = chapterRows
             .filter(row => row.stats.total > 0)
-            .sort((a, b) => (a.acc - b.acc) || (b.wrongCount - a.wrongCount))
+            .sort((a, b) => (a.acc - b.acc) || (b.pendingWrongCount - a.pendingWrongCount))
             .slice(0, 3);
 
         if (insightBox) {
@@ -80,11 +93,12 @@ export function showDashboard() {
         const fragment = document.createDocumentFragment();
         chapterRows.forEach(row => {
             const tr = document.createElement('tr');
+            const masteredText = row.masteredWrongCount > 0 ? ` · 已掌握 ${row.masteredWrongCount}` : '';
             tr.innerHTML = `
                 <td>
                     <div class="dashboard-chapter-cell">
                         <span class="dashboard-chapter-name">${escapeHtml(row.chapter)}</span>
-                        <span class="dashboard-chapter-meta">已覆盖 ${row.practiced}/${row.totalQuestions}，错题 ${row.wrongCount}</span>
+                        <span class="dashboard-chapter-meta">已覆盖 ${row.practiced}/${row.totalQuestions}，待复习 ${row.pendingWrongCount}${masteredText}</span>
                     </div>
                 </td>
                 <td>

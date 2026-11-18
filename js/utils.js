@@ -1,18 +1,48 @@
 const MATH_SEGMENT_REGEX = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|(?<!\\)\$[^$\n]+?(?<!\\)\$)/g;
 
 /**
- * 防抖函数：延迟高频回调执行
+ * 防抖函数：延迟高频回调执行，支持 .flush() 立即落盘与 .cancel() 取消
  */
 export function debounce(func, wait = 200) {
     let timeout = null;
-    return function (...args) {
-        const later = () => {
-            timeout = null;
-            func.apply(this, args);
-        };
+    let lastArgs = null;
+    let lastThis = null;
+
+    function debounced(...args) {
+        lastArgs = args;
+        lastThis = this;
         if (timeout !== null) clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+        timeout = setTimeout(() => {
+            timeout = null;
+            const ctx = lastThis;
+            const callArgs = lastArgs;
+            lastThis = null;
+            lastArgs = null;
+            func.apply(ctx, callArgs);
+        }, wait);
+    }
+
+    debounced.flush = () => {
+        if (timeout === null) return;
+        clearTimeout(timeout);
+        timeout = null;
+        const ctx = lastThis;
+        const callArgs = lastArgs || [];
+        lastThis = null;
+        lastArgs = null;
+        func.apply(ctx, callArgs);
     };
+
+    debounced.cancel = () => {
+        if (timeout !== null) {
+            clearTimeout(timeout);
+            timeout = null;
+        }
+        lastThis = null;
+        lastArgs = null;
+    };
+
+    return debounced;
 }
 
 /**
@@ -107,30 +137,30 @@ export function formatInlineHtml(text, terms = []) {
 
 /**
  * 安全渲染解析 Markdown：先提取保护数学公式块避免 marked 误解析 * / _，再经 DOMPurify 清洗后还原
+ * 若 DOMPurify 不可用，则强制降级为纯文本安全转义，绝不输出未清洗的 HTML
  */
 export function renderMarkdown(text) {
     const source = String(text ?? '').trim();
     if (!source) return '';
 
+    const nonce = Math.random().toString(36).slice(2, 10).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SAFE';
+    const tokenPrefix = `MECHMATHTOKEN${nonce}X`;
     const mathTokens = [];
     const protectedText = source.replace(MATH_SEGMENT_REGEX, match => {
-        const token = `MECHMATHTOKEN${mathTokens.length}END`;
+        const token = `${tokenPrefix}${mathTokens.length}END`;
         mathTokens.push(match);
         return token;
     });
 
-    let html = protectedText;
-    if (typeof globalThis.marked !== 'undefined' && typeof globalThis.marked.parse === 'function') {
-        html = globalThis.marked.parse(protectedText);
+    let html;
+    if (typeof globalThis.marked?.parse === 'function' && typeof globalThis.DOMPurify?.sanitize === 'function') {
+        html = globalThis.DOMPurify.sanitize(globalThis.marked.parse(protectedText));
     } else {
         html = escapeHtml(protectedText).replace(/\r?\n/g, '<br>');
     }
 
-    if (typeof globalThis.DOMPurify !== 'undefined' && typeof globalThis.DOMPurify.sanitize === 'function') {
-        html = globalThis.DOMPurify.sanitize(html);
-    }
-
-    return html.replace(/MECHMATHTOKEN(\d+)END/g, (_, idx) => escapeHtml(mathTokens[Number(idx)] ?? ''));
+    const restoreRegex = new RegExp(`${tokenPrefix}(\\d+)END`, 'g');
+    return html.replace(restoreRegex, (_, idx) => escapeHtml(mathTokens[Number(idx)] ?? ''));
 }
 
 /**
@@ -151,15 +181,60 @@ export function getChapterOrder(chapterName) {
     return numberMap[raw] || Number.MAX_SAFE_INTEGER;
 }
 
+const pendingMathElements = new Set();
+let mathLoadHookBound = false;
+
+function flushPendingMathElements() {
+    if (typeof window === 'undefined' || typeof window.MathJax?.typesetPromise !== 'function') return;
+    const queued = Array.from(pendingMathElements).filter(el => el && el.isConnected !== false);
+    pendingMathElements.clear();
+    if (queued.length > 0) {
+        typesetMathBatched(queued);
+    }
+}
+
+function scheduleMathFlushOnReady() {
+    if (mathLoadHookBound || typeof window === 'undefined' || typeof document === 'undefined') return;
+    mathLoadHookBound = true;
+
+    const triggerFlush = () => {
+        const startup = window.MathJax?.startup?.promise;
+        if (startup && typeof startup.then === 'function') {
+            startup.then(flushPendingMathElements).catch(() => {});
+        } else {
+            flushPendingMathElements();
+        }
+    };
+
+    if (window.MathJax?.startup?.promise) {
+        triggerFlush();
+        return;
+    }
+
+    const script = document.getElementById('MathJax-script');
+    if (script) {
+        script.addEventListener('load', triggerFlush, { once: true });
+        script.addEventListener('error', () => {
+            pendingMathElements.clear();
+            mathLoadHookBound = false;
+        }, { once: true });
+    }
+}
+
 /**
- * 触发单个或多个容器元素的 MathJax 排版
+ * 触发单个或多个容器元素的 MathJax 排版（若 MathJax 仍在异步加载则入队等待就绪后自动补排）
  */
 export function typesetMath(elements) {
-    if (typeof window === 'undefined' || !window.MathJax || typeof window.MathJax.typesetPromise !== 'function') {
-        return Promise.resolve();
-    }
+    if (typeof window === 'undefined') return Promise.resolve();
     const targets = Array.from(elements || []).filter(Boolean);
     if (targets.length === 0) return Promise.resolve();
+
+    if (!window.MathJax || typeof window.MathJax.typesetPromise !== 'function') {
+        targets.forEach(el => pendingMathElements.add(el));
+        scheduleMathFlushOnReady();
+        return Promise.resolve();
+    }
+
     return window.MathJax.typesetPromise(targets).catch(err => {
         console.error('MathJax typeset failed:', err?.message || err);
     });
@@ -173,6 +248,11 @@ let activeTypesetToken = 0;
 export function typesetMathBatched(elements, batchSize = 18) {
     const targets = Array.from(elements || []).filter(Boolean);
     if (targets.length === 0) return;
+
+    if (typeof window === 'undefined' || !window.MathJax || typeof window.MathJax.typesetPromise !== 'function') {
+        typesetMath(targets);
+        return;
+    }
 
     if (targets.length <= batchSize) {
         typesetMath(targets);

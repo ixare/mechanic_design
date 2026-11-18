@@ -365,7 +365,7 @@ export function renderQuestionEditManager() {
                 </div>
                 <div class="question-edit-item-actions">
                     <button type="button" class="action-button" data-action="${editAction}" data-qid="${escapeAttr(change.qid)}"><i data-lucide="pen"></i> 编辑</button>
-                    <button type="button" class="action-button remove-wrong-answer-btn" data-action="${discardAction}" data-qid="${escapeAttr(change.qid)}"><i data-lucide="${discardIcon}"></i> ${discardLabel}</button>
+                    <button type="button" class="action-button remove-wrong-answer-btn action-button--danger-ghost" data-action="${discardAction}" data-qid="${escapeAttr(change.qid)}"><i data-lucide="${discardIcon}"></i> ${discardLabel}</button>
                 </div>
             </div>
         `;

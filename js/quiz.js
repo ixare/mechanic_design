@@ -10,7 +10,7 @@ import {
     typesetMath
 } from './utils.js';
 import { renderIcons } from './icons.js';
-import { closeModal, confirmDialog, configureModal, openModal, requestCloseModal } from './modal.js';
+import { closeModal, confirmDialog, configureModal, isModalOpen, openModal, requestCloseModal } from './modal.js';
 import { getWrongAnswerQids, recordCorrectPractice, recordWrongAnswer, updateStats } from './storage.js';
 import { updateChapterNavStatus } from './ui.js';
 
@@ -19,8 +19,26 @@ const randomTestState = {
     source: 'all',
     selectedChapters: null,
     questionCount: 20,
-    examPreset: 'standard'
+    examPreset: 'standard',
+    examDelivery: 'sheet'
 };
+
+let examDeadline = 0;
+let examVisibilityHandler = null;
+let quizDraftAnswers = [];
+let quizFlaggedSet = new Set();
+
+function clearExamTimer() {
+    if (state.examTimerInterval) {
+        clearInterval(state.examTimerInterval);
+        state.examTimerInterval = null;
+    }
+    examDeadline = 0;
+    if (examVisibilityHandler && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', examVisibilityHandler);
+        examVisibilityHandler = null;
+    }
+}
 
 function getAllChapters() {
     return Object.keys(state.all_data).sort((a, b) => getChapterOrder(a) - getChapterOrder(b));
@@ -34,19 +52,19 @@ function getSelectedChapters() {
     return randomTestState.selectedChapters.filter(chapter => available.has(chapter));
 }
 
-function matchesRandomSource(question, wrongQids) {
+function matchesRandomSource(question, pendingWrongQids) {
     if (randomTestState.source === 'favorites') {
         return state.favorites.includes(question.qid);
     }
     if (randomTestState.source === 'wrong') {
-        return wrongQids.has(question.qid);
+        return pendingWrongQids.has(question.qid);
     }
     return true;
 }
 
 function buildQuestionPool(type = null) {
     const selectedChapters = new Set(getSelectedChapters());
-    const wrongQids = new Set(getWrongAnswerQids());
+    const pendingWrongQids = new Set(getWrongAnswerQids(null, { status: 'pending' }));
     const questions = [];
 
     selectedChapters.forEach(chapterName => {
@@ -55,7 +73,7 @@ function buildQuestionPool(type = null) {
         const chapterQuestions = type
             ? chapter[type]
             : [...chapter.mcq, ...chapter.tf];
-        questions.push(...chapterQuestions.filter(question => matchesRandomSource(question, wrongQids)));
+        questions.push(...chapterQuestions.filter(question => matchesRandomSource(question, pendingWrongQids)));
     });
 
     return questions;
@@ -67,8 +85,8 @@ function getChapterQuestionCount(chapterName) {
     const chapterQuestions = randomTestState.mode === 'exam'
         ? [...chapter.mcq, ...chapter.tf]
         : chapter[randomTestState.mode];
-    const wrongQids = new Set(getWrongAnswerQids());
-    return chapterQuestions.filter(question => matchesRandomSource(question, wrongQids)).length;
+    const pendingWrongQids = new Set(getWrongAnswerQids(null, { status: 'pending' }));
+    return chapterQuestions.filter(question => matchesRandomSource(question, pendingWrongQids)).length;
 }
 
 /**
@@ -86,7 +104,7 @@ export function shuffleQuestions(questions) {
 function getRandomSourceLabel() {
     const labels = {
         all: '全部题目',
-        wrong: '错题',
+        wrong: '待复习错题',
         favorites: '收藏'
     };
     return labels[randomTestState.source] || labels.all;
@@ -99,6 +117,7 @@ function ensureRandomTestModal() {
     modal = document.createElement('div');
     modal.id = 'random-test-modal';
     modal.className = 'modal';
+    modal.setAttribute('aria-hidden', 'true');
     modal.innerHTML = `
         <div class="modal-content random-test-panel">
             <button class="close-modal" type="button" id="close-random-test-modal" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
@@ -107,13 +126,20 @@ function ensureRandomTestModal() {
                 <div class="random-test-section-title">抽题来源</div>
                 <div class="random-source-options">
                     <label><input type="radio" name="random-test-source" value="all" checked> 全部题目</label>
-                    <label><input type="radio" name="random-test-source" value="wrong"> 只抽错题</label>
+                    <label><input type="radio" name="random-test-source" value="wrong"> 只抽待复习错题</label>
                     <label><input type="radio" name="random-test-source" value="favorites"> 只抽收藏</label>
                 </div>
             </div>
             <div class="random-test-section" id="random-test-count-section">
                 <div class="random-test-section-title" id="random-test-count-label">抽题数量</div>
                 <div class="random-count-options" id="random-count-options"></div>
+            </div>
+            <div class="random-test-section" id="random-exam-delivery-section" style="display:none;">
+                <div class="random-test-section-title">作答方式</div>
+                <div class="random-count-options" id="random-delivery-options">
+                    <label><input type="radio" name="random-exam-delivery" value="sheet" checked> <span>考场全卷 (答题卡 · 统一交卷批改)</span></label>
+                    <label><input type="radio" name="random-exam-delivery" value="instant"> <span>逐题自测 (每题即时看解析)</span></label>
+                </div>
             </div>
             <div class="random-test-section">
                 <div class="random-test-toolbar">
@@ -150,6 +176,10 @@ function ensureRandomTestModal() {
         }
         if (event.target.name === 'random-exam-preset') {
             randomTestState.examPreset = event.target.value;
+            updateRandomTestSummary();
+        }
+        if (event.target.name === 'random-exam-delivery') {
+            randomTestState.examDelivery = event.target.value;
             updateRandomTestSummary();
         }
     });
@@ -234,14 +264,18 @@ function updateRandomTestSummary() {
 
     let modeLabel;
     if (randomTestState.mode === 'exam') {
-        modeLabel = `模拟考试：池内共 ${mcqCount} 道单选、${tfCount} 道判断`;
+        const deliveryLabel = randomTestState.examDelivery === 'sheet' ? '考场全卷' : '逐题自测';
+        modeLabel = `模拟考试 (${deliveryLabel})：池内共 ${mcqCount} 道单选、${tfCount} 道判断`;
     } else {
         const limitLabel = randomTestState.questionCount > 0
             ? `抽取最多 ${Math.min(randomTestState.questionCount, total)} 道（池内共 ${total} 道）`
             : `全部 ${total} 道`;
         modeLabel = `${randomTestState.mode === 'mcq' ? '选择题' : '判断题'}随机测试：${limitLabel}`;
     }
-    summary.textContent = `已选 ${selectedCount} 个章节，来源：${sourceLabel}，${modeLabel}`;
+    const masteredNote = randomTestState.source === 'wrong' && total === 0 && getWrongAnswerQids().length > 0
+        ? '（当前历史错题均已掌握）'
+        : '';
+    summary.textContent = `已选 ${selectedCount} 个章节，来源：${sourceLabel}，${modeLabel}${masteredNote}`;
 }
 
 export function openRandomTestSetup(mode) {
@@ -265,6 +299,13 @@ export function openRandomTestSetup(mode) {
     const sourceInput = modal.querySelector(`input[name="random-test-source"][value="${randomTestState.source}"]`);
     if (sourceInput) sourceInput.checked = true;
 
+    const deliverySection = document.getElementById('random-exam-delivery-section');
+    if (deliverySection) {
+        deliverySection.style.display = mode === 'exam' ? 'block' : 'none';
+    }
+    const deliveryInput = modal.querySelector(`input[name="random-exam-delivery"][value="${randomTestState.examDelivery}"]`);
+    if (deliveryInput) deliveryInput.checked = true;
+
     renderRandomTestCountOptions();
     renderRandomTestChapters();
     updateRandomTestSummary();
@@ -286,6 +327,7 @@ function startConfiguredRandomTest() {
             mcqPool: buildQuestionPool('mcq'),
             tfPool: buildQuestionPool('tf'),
             preset: randomTestState.examPreset,
+            delivery: randomTestState.examDelivery,
             titleSuffix: `｜${getRandomSourceLabel()}｜${getSelectedChapters().length}章`
         });
         return;
@@ -314,20 +356,31 @@ export function startOverallTest(type, options = {}) {
 }
 
 export function startAllWrongAnswersTest() {
-    const allWrongQids = getWrongAnswerQids();
+    const statusFilter = state.wrongStatusFilter || 'pending';
+    const allWrongQids = getWrongAnswerQids(null, { status: statusFilter });
     if (allWrongQids.length === 0) {
-        showToast('您的错题本是空的，无法开始测试。', 'info');
+        const hasMastered = statusFilter === 'pending' && getWrongAnswerQids().length > 0;
+        showToast(
+            hasMastered ? '待复习错题已全部掌握；如需重练已掌握题目，请先切换“显示全部错题”。' : '您的错题本是空的，无法开始测试。',
+            'info'
+        );
         return;
     }
     const questionPool = allWrongQids.map(qid => state.question_lookup[qid]).filter(Boolean);
-    startQuiz(questionPool, 0, '所有错题随机测试');
+    const title = statusFilter === 'pending' ? '待复习错题随机测试' : '所有错题随机测试';
+    startQuiz(questionPool, 0, title);
 }
 
 export function startCurrentChapterWrongAnswersTest() {
     if (!state.activeChapter) return;
-    const chapterWrongQids = getWrongAnswerQids(state.activeChapter);
+    const statusFilter = state.wrongStatusFilter || 'pending';
+    const chapterWrongQids = getWrongAnswerQids(state.activeChapter, { status: statusFilter });
     if (chapterWrongQids.length === 0) {
-        showToast('本章没有错题，无法开始测试。', 'info');
+        const hasMastered = statusFilter === 'pending' && getWrongAnswerQids(state.activeChapter).length > 0;
+        showToast(
+            hasMastered ? '本章错题已全部掌握；如需重练请先切换“显示全部错题”。' : '本章没有错题，无法开始测试。',
+            'info'
+        );
         return;
     }
     const questionPool = chapterWrongQids.map(qid => state.question_lookup[qid]).filter(Boolean);
@@ -342,10 +395,34 @@ export function startLastWrongQuizTest() {
     startQuiz(state.lastWrongQuizQuestions, 0, '本次错题重练');
 }
 
+function handleExamTimeout() {
+    if (state.quizFinalized) return;
+    if (isModalOpen('app-confirm-modal')) {
+        closeModal('app-confirm-modal');
+    }
+    showToast('考试时间到，已自动提交试卷。', 'warning', 4500);
+
+    if (state.quizDelivery === 'sheet') {
+        finalizeSheetExam({ timedOut: true });
+        return;
+    }
+
+    if (state.quizState === 'ANSWERING') {
+        const selectedOption = typeof document !== 'undefined'
+            ? document.querySelector('input[name="quizOption"]:checked')
+            : null;
+        if (selectedOption) {
+            submitQuizAnswer(false);
+        }
+    }
+    showQuizResults();
+}
+
 export function startMockExam(options = {}) {
     const mcqPool = options.mcqPool || globalThis.mcq_data || [];
     const tfPool = options.tfPool || globalThis.tf_data || [];
     const preset = options.preset || 'standard';
+    const delivery = options.delivery === 'sheet' ? 'sheet' : 'instant';
 
     const presetLimits = {
         standard: { mcq: 30, tf: 20, minutes: 20, label: '模拟考试 (20分钟)' },
@@ -362,30 +439,38 @@ export function startMockExam(options = {}) {
         return;
     }
 
-    startQuiz(questions, questions.length, `${cfg.label}${options.titleSuffix || ''}`, { alreadyShuffled: true });
+    startQuiz(questions, questions.length, `${cfg.label}${options.titleSuffix || ''}`, {
+        alreadyShuffled: true,
+        delivery
+    });
 
     state.quizMode = 'exam';
     const timerEl = document.getElementById('quiz-timer');
-    if (state.examTimerInterval) {
-        clearInterval(state.examTimerInterval);
-        state.examTimerInterval = null;
-    }
+    clearExamTimer();
 
     if (cfg.minutes > 0 && timerEl) {
         timerEl.style.display = 'block';
-        state.examTimeRemaining = cfg.minutes * 60;
-        updateTimerDisplay();
+        examDeadline = Date.now() + cfg.minutes * 60 * 1000;
 
-        state.examTimerInterval = setInterval(() => {
-            state.examTimeRemaining--;
+        const syncRemaining = () => {
+            if (!examDeadline || state.quizFinalized) return;
+            const remaining = Math.max(0, Math.ceil((examDeadline - Date.now()) / 1000));
+            state.examTimeRemaining = remaining;
             updateTimerDisplay();
-            if (state.examTimeRemaining <= 0) {
-                clearInterval(state.examTimerInterval);
-                state.examTimerInterval = null;
-                showToast('考试时间到，已自动提交试卷。', 'warning', 4500);
-                showQuizResults();
+            if (remaining <= 0) {
+                clearExamTimer();
+                handleExamTimeout();
             }
-        }, 1000);
+        };
+
+        syncRemaining();
+        state.examTimerInterval = setInterval(syncRemaining, 500);
+        if (typeof document !== 'undefined') {
+            examVisibilityHandler = () => {
+                if (!document.hidden) syncRemaining();
+            };
+            document.addEventListener('visibilitychange', examVisibilityHandler);
+        }
     }
 }
 
@@ -395,6 +480,7 @@ export function startQuiz(questionPool, numQuestions, title, options = {}) {
     state.quizAnswers = [];
     state.lastWrongQuizQuestions = [];
     state.quizMode = 'practice';
+    state.quizDelivery = options.delivery === 'sheet' ? 'sheet' : 'instant';
     state.quizFinalized = false;
 
     const shuffled = options.alreadyShuffled ? [...questionPool] : shuffleQuestions(questionPool);
@@ -402,16 +488,15 @@ export function startQuiz(questionPool, numQuestions, title, options = {}) {
         ? shuffled.slice(0, numQuestions)
         : shuffled;
     state.quizLength = state.quizQuestions.length;
+    quizDraftAnswers = new Array(state.quizLength).fill(null);
+    quizFlaggedSet = new Set();
 
     if (state.quizLength === 0) {
         showToast('没有可供测试的题目。', 'warning');
         return;
     }
 
-    if (state.examTimerInterval) {
-        clearInterval(state.examTimerInterval);
-        state.examTimerInterval = null;
-    }
+    clearExamTimer();
 
     document.getElementById('quiz-title').textContent = title;
     document.getElementById('quiz-score').style.display = 'none';
@@ -421,7 +506,7 @@ export function startQuiz(questionPool, numQuestions, title, options = {}) {
     configureModal('quiz-modal', {
         closeOnBackdrop: false,
         onBeforeClose: async () => {
-            if (state.quizState === 'ANSWERING' || state.quizState === 'FEEDBACK') {
+            if (!state.quizFinalized && (state.quizState === 'ANSWERING' || state.quizState === 'FEEDBACK')) {
                 return confirmDialog({
                     title: '退出当前测试',
                     message: '测试尚未完成，确定要提前退出吗？当前未完成部分的成绩将不会结算。',
@@ -433,10 +518,7 @@ export function startQuiz(questionPool, numQuestions, title, options = {}) {
             return true;
         },
         onAfterClose: () => {
-            if (state.examTimerInterval) {
-                clearInterval(state.examTimerInterval);
-                state.examTimerInterval = null;
-            }
+            clearExamTimer();
             const timerEl = document.getElementById('quiz-timer');
             if (timerEl) timerEl.style.display = 'none';
             state.quizState = 'IDLE';
@@ -464,19 +546,166 @@ export function closeQuiz(force = false) {
     requestCloseModal('quiz-modal');
 }
 
+function buildKeyboardHint(question, optionKeys) {
+    const isSheet = state.quizDelivery === 'sheet';
+    if (question.type === 'tf') {
+        return isSheet
+            ? '提示：使用键盘 T/1(对) / F/2(错) 选择，←/→ 或 Enter 切换题目。'
+            : '提示：使用键盘 T/1(对) / F/2(错) 选择，Enter 提交答案/下一题，Space 跳过。';
+    }
+    const letters = optionKeys.filter(Boolean).join('/');
+    const numbers = optionKeys.length > 0
+        ? (optionKeys.length === 1 ? '1' : `1-${optionKeys.length}`)
+        : '1-3';
+    const keyDesc = letters ? `${letters} 或 ${numbers}` : numbers;
+    return isSheet
+        ? `提示：使用键盘 ${keyDesc} 选择，←/→ 或 Enter 切换题目。`
+        : `提示：使用键盘 ${keyDesc} 选择，Enter 提交答案/下一题，Space 跳过。`;
+}
+
+function renderQuizSheetNav() {
+    const navEl = document.getElementById('quiz-sheet-nav');
+    if (!navEl) return;
+    if (state.quizDelivery !== 'sheet') {
+        navEl.style.display = 'none';
+        navEl.innerHTML = '';
+        return;
+    }
+
+    navEl.style.display = 'flex';
+    navEl.innerHTML = state.quizQuestions.map((_, idx) => {
+        const classes = ['quiz-sheet-btn'];
+        if (idx === state.currentQuestionIndex) classes.push('is-current');
+        if (quizDraftAnswers[idx]) classes.push('is-answered');
+        if (quizFlaggedSet.has(idx)) classes.push('is-flagged');
+        return `<button type="button" class="${classes.join(' ')}" data-quiz-jump="${idx}" aria-label="第 ${idx + 1} 题"${idx === state.currentQuestionIndex ? ' aria-current="step"' : ''}>${idx + 1}</button>`;
+    }).join('');
+}
+
+function syncQuizFlagButton() {
+    const flagBtn = document.getElementById('quiz-flag-btn');
+    if (!flagBtn) return;
+    if (state.quizDelivery !== 'sheet') {
+        flagBtn.style.display = 'none';
+        return;
+    }
+    const flagged = quizFlaggedSet.has(state.currentQuestionIndex);
+    flagBtn.style.display = 'inline-flex';
+    flagBtn.classList.toggle('is-flagged', flagged);
+    flagBtn.setAttribute('aria-pressed', String(flagged));
+    flagBtn.innerHTML = flagged
+        ? '<i data-lucide="flag"></i> 已标存疑'
+        : '<i data-lucide="flag"></i> 标记存疑';
+    renderIcons(flagBtn);
+}
+
+export function setSheetDraftAnswer(index, value) {
+    if (index < 0 || index >= state.quizLength) return;
+    quizDraftAnswers[index] = value;
+    renderQuizSheetNav();
+}
+
+export function getQuizDraftAnswers() {
+    return [...quizDraftAnswers];
+}
+
+export function jumpToQuizQuestion(index) {
+    if (state.quizDelivery !== 'sheet' || state.quizFinalized) return;
+    const target = Number(index);
+    if (!Number.isInteger(target) || target < 0 || target >= state.quizLength) return;
+    state.currentQuestionIndex = target;
+    displayQuizQuestion();
+}
+
+export function prevQuizQuestion() {
+    if (state.quizDelivery !== 'sheet' || state.quizFinalized) return;
+    if (state.currentQuestionIndex > 0) {
+        state.currentQuestionIndex--;
+        displayQuizQuestion();
+    }
+}
+
+export function toggleQuizFlag() {
+    if (state.quizDelivery !== 'sheet' || state.quizFinalized) return;
+    const idx = state.currentQuestionIndex;
+    if (quizFlaggedSet.has(idx)) {
+        quizFlaggedSet.delete(idx);
+    } else {
+        quizFlaggedSet.add(idx);
+    }
+    syncQuizFlagButton();
+    renderQuizSheetNav();
+}
+
+function finalizeSheetExam() {
+    if (state.quizFinalized) return;
+    const quizTitle = document.getElementById('quiz-title')?.textContent || '模拟考试';
+
+    state.score = 0;
+    state.quizAnswers = state.quizQuestions.map((question, idx) => {
+        const draft = quizDraftAnswers[idx];
+        const skipped = !draft;
+        const normalizedCorrect = String(question.answer || '').trim().toUpperCase();
+        const normalizedUser = skipped ? '' : String(draft).trim().toUpperCase();
+        const isCorrect = !skipped && normalizedUser === normalizedCorrect;
+
+        updateStats(question, isCorrect);
+        if (isCorrect) {
+            state.score++;
+            recordCorrectPractice(question);
+        } else {
+            recordWrongAnswer(question, quizTitle);
+        }
+
+        return {
+            qid: question.qid,
+            userAnswer: skipped ? '未作答' : draft,
+            correctAnswer: question.answer,
+            isCorrect,
+            skipped,
+            chapter: question.chapter,
+            type: question.type
+        };
+    });
+
+    updateChapterNavStatus();
+    showQuizResults();
+}
+
+export async function finishExamQuiz() {
+    if (state.quizDelivery !== 'sheet' || state.quizFinalized) return;
+    const unanswered = quizDraftAnswers.filter(val => !val).length;
+    if (unanswered > 0) {
+        const confirmed = await confirmDialog({
+            title: '确认交卷',
+            message: `还有 ${unanswered} 道题尚未作答，确定现在交卷结算吗？`,
+            confirmText: '立即交卷',
+            cancelText: '继续检查'
+        });
+        if (!confirmed) return;
+    }
+    finalizeSheetExam();
+}
+
 export function displayQuizQuestion() {
     if (state.currentQuestionIndex < state.quizLength) {
         const question = state.quizQuestions[state.currentQuestionIndex];
         const questionContainer = document.getElementById('quiz-question-container');
         const instructionsEl = document.getElementById('keyboard-instructions');
-
-        instructionsEl.textContent = question.type === 'mcq'
-            ? '提示：使用键盘 A/B/C/D 或 1/2/3/4 选择，Enter 提交答案/下一题，Space 跳过。'
-            : '提示：使用键盘 T/1(对) / F/2(错) 选择，Enter 提交答案/下一题，Space 跳过。';
+        const optionKeys = [];
 
         document.getElementById('quiz-question-text').innerHTML = formatInlineHtml(question.question);
         const optionsContainer = document.getElementById('quiz-options');
         optionsContainer.innerHTML = '';
+        if (!optionsContainer.dataset.sheetBound) {
+            optionsContainer.dataset.sheetBound = 'true';
+            optionsContainer.addEventListener('change', event => {
+                if (state.quizDelivery !== 'sheet' || state.quizFinalized) return;
+                if (event.target?.name === 'quizOption') {
+                    setSheetDraftAnswer(state.currentQuestionIndex, event.target.value);
+                }
+            });
+        }
 
         const favBtn = document.getElementById('quiz-favorite-btn');
         const isFav = state.favorites.includes(question.qid);
@@ -487,15 +716,19 @@ export function displayQuizQuestion() {
         favBtn.dataset.action = 'toggleFavorite';
         renderIcons(favBtn);
 
+        const currentDraft = state.quizDelivery === 'sheet' ? quizDraftAnswers[state.currentQuestionIndex] : null;
+
         if (question.type === 'mcq') {
             (question.options || []).forEach(rawOption => {
                 const { key, text } = parseMcqOption(rawOption);
+                optionKeys.push(key);
                 const label = document.createElement('label');
                 label.className = 'quiz-option-item';
                 const radio = Object.assign(document.createElement('input'), {
                     type: 'radio',
                     name: 'quizOption',
-                    value: key
+                    value: key,
+                    checked: Boolean(currentDraft && currentDraft === key)
                 });
                 label.innerHTML = `
                     <span class="quiz-option-key">${escapeHtml(key)}</span>
@@ -510,7 +743,8 @@ export function displayQuizQuestion() {
             const radioTrue = Object.assign(document.createElement('input'), {
                 type: 'radio',
                 name: 'quizOption',
-                value: '✓'
+                value: '✓',
+                checked: currentDraft === '✓'
             });
             labelTrue.innerHTML = `
                 <span class="quiz-option-key"><i data-lucide="check"></i></span>
@@ -523,7 +757,8 @@ export function displayQuizQuestion() {
             const radioFalse = Object.assign(document.createElement('input'), {
                 type: 'radio',
                 name: 'quizOption',
-                value: '×'
+                value: '×',
+                checked: currentDraft === '×'
             });
             labelFalse.innerHTML = `
                 <span class="quiz-option-key"><i data-lucide="x"></i></span>
@@ -536,11 +771,34 @@ export function displayQuizQuestion() {
             renderIcons(optionsContainer);
         }
 
+        instructionsEl.textContent = buildKeyboardHint(question, optionKeys);
         document.getElementById('quiz-progress').textContent = `进度: ${state.currentQuestionIndex + 1} / ${state.quizLength}`;
         document.getElementById('quiz-feedback').style.display = 'none';
-        document.getElementById('submit-answer-btn').style.display = 'inline-flex';
-        document.getElementById('next-question-btn').style.display = 'none';
 
+        const prevBtn = document.getElementById('prev-question-btn');
+        const submitBtn = document.getElementById('submit-answer-btn');
+        const nextBtn = document.getElementById('next-question-btn');
+        const finishBtn = document.getElementById('finish-exam-btn');
+
+        if (state.quizDelivery === 'sheet') {
+            if (prevBtn) {
+                prevBtn.style.display = 'inline-flex';
+                prevBtn.disabled = state.currentQuestionIndex === 0;
+            }
+            if (submitBtn) submitBtn.style.display = 'none';
+            if (nextBtn) {
+                nextBtn.style.display = state.currentQuestionIndex < state.quizLength - 1 ? 'inline-flex' : 'none';
+            }
+            if (finishBtn) finishBtn.style.display = 'inline-flex';
+        } else {
+            if (prevBtn) prevBtn.style.display = 'none';
+            if (submitBtn) submitBtn.style.display = 'inline-flex';
+            if (nextBtn) nextBtn.style.display = 'none';
+            if (finishBtn) finishBtn.style.display = 'none';
+        }
+
+        syncQuizFlagButton();
+        renderQuizSheetNav();
         typesetMath([questionContainer]);
 
         state.quizState = 'ANSWERING';
@@ -607,6 +865,13 @@ export function submitQuizAnswer(skipped = false) {
 }
 
 export function nextQuizQuestion() {
+    if (state.quizDelivery === 'sheet') {
+        if (state.currentQuestionIndex < state.quizLength - 1 && !state.quizFinalized) {
+            state.currentQuestionIndex++;
+            displayQuizQuestion();
+        }
+        return;
+    }
     if (state.quizState !== 'FEEDBACK') return;
     state.currentQuestionIndex++;
     displayQuizQuestion();
@@ -615,12 +880,17 @@ export function nextQuizQuestion() {
 export function showQuizResults() {
     if (state.quizFinalized) return;
     state.quizFinalized = true;
-    if (state.examTimerInterval) {
-        clearInterval(state.examTimerInterval);
-        state.examTimerInterval = null;
-    }
+    clearExamTimer();
     document.getElementById('quiz-timer').style.display = 'none';
     document.getElementById('quiz-content').style.display = 'none';
+    const sheetNav = document.getElementById('quiz-sheet-nav');
+    if (sheetNav) sheetNav.style.display = 'none';
+    const flagBtn = document.getElementById('quiz-flag-btn');
+    if (flagBtn) flagBtn.style.display = 'none';
+    const prevBtn = document.getElementById('prev-question-btn');
+    if (prevBtn) prevBtn.style.display = 'none';
+    const finishBtn = document.getElementById('finish-exam-btn');
+    if (finishBtn) finishBtn.style.display = 'none';
     const scoreEl = document.getElementById('quiz-score');
     scoreEl.style.display = 'block';
 
@@ -638,6 +908,9 @@ export function showQuizResults() {
             isCorrect: false,
             skipped: true
         };
+        const statusText = answer.isCorrect
+            ? '正确'
+            : (answer.userAnswer === '未作答' ? '未作答' : (answer.skipped ? '跳过' : '错误'));
         const explanationHtml = renderMarkdown(question.explanation || '暂无解析');
         const optionsMarkup = question.type === 'mcq'
             ? `<ul>${(question.options || []).map(option => `<li>${formatInlineHtml(option)}</li>`).join('')}</ul>`
@@ -647,7 +920,7 @@ export function showQuizResults() {
             <details class="quiz-review-item ${answer.isCorrect ? 'is-correct' : 'is-wrong'}">
                 <summary>
                     <span>第 ${index + 1} 题</span>
-                    <strong>${answer.isCorrect ? '正确' : (answer.skipped ? '跳过' : '错误')}</strong>
+                    <strong>${statusText}</strong>
                 </summary>
                 <p>${formatInlineHtml(question.question)}</p>
                 ${optionsMarkup}

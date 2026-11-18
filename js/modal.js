@@ -17,10 +17,21 @@ const FOCUSABLE_SELECTOR = [
 
 function getFocusableElements(container) {
     if (!container) return [];
+    const hasComputedStyle = typeof window !== 'undefined' && typeof window.getComputedStyle === 'function';
     return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(el => {
         if (el.closest('[hidden]')) return false;
+        if (!hasComputedStyle) return el.style?.display !== 'none' && el.style?.visibility !== 'hidden';
         const style = window.getComputedStyle(el);
         return style.display !== 'none' && style.visibility !== 'hidden';
+    });
+}
+
+function syncBackgroundInert() {
+    if (typeof document === 'undefined') return;
+    const locked = modalStack.length > 0;
+    ['sidebar', 'main-content', 'right-sidebar'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.inert = locked;
     });
 }
 
@@ -117,9 +128,11 @@ export function openModal(id, options = {}) {
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('modal-open');
+    syncBackgroundInert();
     renderIcons(modal);
 
-    requestAnimationFrame(() => {
+    const scheduleFocus = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : fn => setTimeout(fn, 0);
+    scheduleFocus(() => {
         if (!modal.classList.contains('is-open')) return;
         let focusTarget = options.focusSelector ? modal.querySelector(options.focusSelector) : null;
         if (!focusTarget) {
@@ -133,7 +146,7 @@ export function openModal(id, options = {}) {
 }
 
 /**
- * 同步关闭指定弹窗并恢复焦点
+ * 同步关闭指定弹窗并恢复焦点（支持嵌套父弹窗焦点回归）
  */
 export function closeModal(id) {
     const modal = document.getElementById(id);
@@ -149,14 +162,29 @@ export function closeModal(id) {
     if (modalStack.length === 0) {
         document.body.classList.remove('modal-open');
     }
+    syncBackgroundInert();
 
     const config = modalConfigs.get(id);
     if (config?.onAfterClose) {
         config.onAfterClose();
     }
 
-    if (entry?.returnFocusTo && document.contains(entry.returnFocusTo) && modalStack.length === 0) {
+    if (modalStack.length === 0) {
+        if (entry?.returnFocusTo && document.contains(entry.returnFocusTo)) {
+            entry.returnFocusTo.focus();
+        }
+        return;
+    }
+
+    const topModal = document.getElementById(modalStack[modalStack.length - 1].id);
+    if (!topModal) return;
+    if (entry?.returnFocusTo && document.contains(entry.returnFocusTo) && topModal.contains(entry.returnFocusTo)) {
         entry.returnFocusTo.focus();
+        return;
+    }
+    const fallbackFocus = getFocusableElements(topModal)[0];
+    if (fallbackFocus && typeof fallbackFocus.focus === 'function') {
+        fallbackFocus.focus();
     }
 }
 

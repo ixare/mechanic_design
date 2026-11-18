@@ -281,13 +281,116 @@ export function updateStats(question, isCorrect) {
 }
 
 export function getTotalPracticedCount() {
-    return Array.isArray(state.userStats.practicedQids) ? state.userStats.practicedQids.length : 0;
+    if (!Array.isArray(state.userStats.practicedQids)) return 0;
+    return state.userStats.practicedQids.filter(qid => Boolean(state.question_lookup[qid])).length;
 }
 
 export function getChapterPracticedCount(chapter) {
     const entry = state.userStats.chapterStats?.[chapter];
-    if (!entry) return 0;
-    return Array.isArray(entry.practicedQids) ? entry.practicedQids.length : 0;
+    if (!entry || !Array.isArray(entry.practicedQids)) return 0;
+    return entry.practicedQids.filter(qid => state.question_lookup[qid]?.chapter === chapter).length;
+}
+
+/**
+ * 删除题目时级联清理内存与存储中的收藏、错题与覆盖统计记录
+ */
+export function purgeQuestionRecords(qid) {
+    if (!qid) return;
+    const normalizedQid = normalizeQid(qid);
+
+    const nextFavs = state.favorites.filter(id => id !== qid && id !== normalizedQid);
+    if (nextFavs.length !== state.favorites.length) {
+        state.favorites = nextFavs;
+        saveFavorites();
+    }
+
+    let wrongChanged = false;
+    Object.keys(state.wrongAnswersByChapter).forEach(chapter => {
+        const bucket = state.wrongAnswersByChapter[chapter];
+        if (Array.isArray(bucket)) {
+            const filtered = bucket.filter(id => normalizeQid(id) !== normalizedQid);
+            if (filtered.length !== bucket.length) {
+                wrongChanged = true;
+                if (filtered.length === 0) delete state.wrongAnswersByChapter[chapter];
+                else state.wrongAnswersByChapter[chapter] = filtered;
+            }
+        } else if (bucket && typeof bucket === 'object') {
+            if (Object.prototype.hasOwnProperty.call(bucket, normalizedQid)) {
+                delete bucket[normalizedQid];
+                wrongChanged = true;
+            }
+            if (Object.prototype.hasOwnProperty.call(bucket, qid)) {
+                delete bucket[qid];
+                wrongChanged = true;
+            }
+            if (Object.keys(bucket).length === 0) {
+                delete state.wrongAnswersByChapter[chapter];
+            }
+        }
+    });
+    if (wrongChanged) {
+        saveWrongAnswers();
+    }
+
+    let statsChanged = false;
+    if (Array.isArray(state.userStats.practicedQids)) {
+        const nextGlobal = state.userStats.practicedQids.filter(id => id !== qid && id !== normalizedQid);
+        if (nextGlobal.length !== state.userStats.practicedQids.length) {
+            state.userStats.practicedQids = nextGlobal;
+            statsChanged = true;
+        }
+    }
+    if (state.userStats.chapterStats && typeof state.userStats.chapterStats === 'object') {
+        Object.values(state.userStats.chapterStats).forEach(entry => {
+            if (entry && Array.isArray(entry.practicedQids)) {
+                const nextChapter = entry.practicedQids.filter(id => id !== qid && id !== normalizedQid);
+                if (nextChapter.length !== entry.practicedQids.length) {
+                    entry.practicedQids = nextChapter;
+                    statsChanged = true;
+                }
+            }
+        });
+    }
+    if (statsChanged) {
+        saveStats();
+    }
+}
+
+/**
+ * 题目所属章节变更时，同步迁移错题桶与章节已练记录
+ */
+export function relocateQuestionRecords(qid, oldChapter, newChapter) {
+    if (!qid || !oldChapter || !newChapter || oldChapter === newChapter) return;
+    const normalizedQid = normalizeQid(qid);
+
+    const oldWrongBucket = state.wrongAnswersByChapter[oldChapter];
+    if (oldWrongBucket && !Array.isArray(oldWrongBucket) && oldWrongBucket[normalizedQid]) {
+        if (!state.wrongAnswersByChapter[newChapter] || Array.isArray(state.wrongAnswersByChapter[newChapter])) {
+            state.wrongAnswersByChapter[newChapter] = {};
+        }
+        state.wrongAnswersByChapter[newChapter][normalizedQid] = oldWrongBucket[normalizedQid];
+        delete oldWrongBucket[normalizedQid];
+        if (Object.keys(oldWrongBucket).length === 0) {
+            delete state.wrongAnswersByChapter[oldChapter];
+        }
+        saveWrongAnswers();
+    }
+
+    const oldChapterStats = state.userStats.chapterStats?.[oldChapter];
+    if (oldChapterStats && Array.isArray(oldChapterStats.practicedQids) && oldChapterStats.practicedQids.includes(normalizedQid)) {
+        oldChapterStats.practicedQids = oldChapterStats.practicedQids.filter(id => id !== normalizedQid);
+        if (!state.userStats.chapterStats[newChapter]) {
+            state.userStats.chapterStats[newChapter] = { total: 0, correct: 0, practicedQids: [] };
+        }
+        const newChapterStats = state.userStats.chapterStats[newChapter];
+        if (!Array.isArray(newChapterStats.practicedQids)) {
+            newChapterStats.practicedQids = [];
+        }
+        if (!newChapterStats.practicedQids.includes(normalizedQid)) {
+            newChapterStats.practicedQids.push(normalizedQid);
+        }
+        saveStats();
+    }
 }
 
 export function loadPracticeSettings() {
@@ -314,6 +417,12 @@ export const saveNotepad = debounce(function () {
     if (!notepadEl) return;
     safeStorageSet(NOTEPAD_KEY, notepadEl.value);
 }, 500);
+
+export function flushNotepad() {
+    if (typeof saveNotepad.flush === 'function') {
+        saveNotepad.flush();
+    }
+}
 
 export function encodeBackupPayload(data) {
     const json = JSON.stringify(data);

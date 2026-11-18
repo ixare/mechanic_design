@@ -47,7 +47,8 @@ export {
     toggleSingleAnswer
 };
 
-let wrongStatusFilter = 'all';
+let isApplyingRoute = false;
+let routeListenerBound = false;
 
 function getSearchTerms(query) {
     return String(query || '').trim().split(/\s+/).filter(Boolean);
@@ -60,13 +61,49 @@ function updateWorkspacePath(text) {
     pathEl.title = text;
 }
 
+function syncRouteHash(hash, replace = false) {
+    if (isApplyingRoute || typeof window === 'undefined' || !window.location) return;
+    const nextHash = hash.startsWith('#') ? hash : `#${hash}`;
+    if (window.location.hash === nextHash) return;
+    if (replace && typeof window.history?.replaceState === 'function') {
+        window.history.replaceState(null, '', nextHash);
+    } else {
+        window.location.hash = nextHash;
+    }
+}
+
+export function syncDrawerAriaExpanded() {
+    if (typeof document === 'undefined') return;
+    const sidebarOpen = document.body.classList.contains('sidebar-open');
+    const rightOpen = document.body.classList.contains('right-sidebar-open');
+    const chapterOpen = document.body.classList.contains('chapter-drawer-open');
+
+    const menuToggle = document.getElementById('menu-toggle');
+    if (menuToggle) menuToggle.setAttribute('aria-expanded', String(sidebarOpen));
+
+    const notepadToggle = document.getElementById('notepad-toggle');
+    if (notepadToggle) notepadToggle.setAttribute('aria-expanded', String(rightOpen));
+
+    const chapterToggle = document.getElementById('chapter-drawer-toggle');
+    if (chapterToggle) {
+        chapterToggle.setAttribute('aria-expanded', String(chapterOpen));
+        chapterToggle.classList.toggle('is-active', chapterOpen);
+    }
+
+    const backdrop = document.getElementById('drawer-backdrop');
+    if (backdrop) {
+        backdrop.setAttribute('aria-hidden', String(!(sidebarOpen || rightOpen || chapterOpen)));
+    }
+}
+
+export function closeAllDrawers() {
+    document.body.classList.remove('sidebar-open', 'right-sidebar-open', 'chapter-drawer-open');
+    syncDrawerAriaExpanded();
+}
+
 export function closeChapterDrawer() {
     document.body.classList.remove('chapter-drawer-open');
-    const toggleBtn = document.getElementById('chapter-drawer-toggle');
-    if (toggleBtn) {
-        toggleBtn.setAttribute('aria-expanded', 'false');
-        toggleBtn.classList.remove('is-active');
-    }
+    syncDrawerAriaExpanded();
 }
 
 export function toggleChapterDrawer(force = null) {
@@ -80,12 +117,7 @@ export function toggleChapterDrawer(force = null) {
     } else {
         document.body.classList.remove('chapter-drawer-open');
     }
-
-    const toggleBtn = document.getElementById('chapter-drawer-toggle');
-    if (toggleBtn) {
-        toggleBtn.setAttribute('aria-expanded', String(nextOpen));
-        toggleBtn.classList.toggle('is-active', nextOpen);
-    }
+    syncDrawerAriaExpanded();
 }
 
 export function syncDesktopSidebarButton() {
@@ -188,8 +220,8 @@ export function setupMobileMenu() {
         menuToggle.addEventListener('click', e => {
             e.stopPropagation();
             document.body.classList.toggle('sidebar-open');
-            document.body.classList.remove('right-sidebar-open');
-            closeChapterDrawer();
+            document.body.classList.remove('right-sidebar-open', 'chapter-drawer-open');
+            syncDrawerAriaExpanded();
         });
     }
 
@@ -197,6 +229,7 @@ export function setupMobileMenu() {
         sidebar.addEventListener('click', event => {
             if (event.target.closest('button') && window.innerWidth <= 992) {
                 document.body.classList.remove('sidebar-open');
+                syncDrawerAriaExpanded();
             }
         });
     }
@@ -209,26 +242,34 @@ export function setupMobileMenu() {
         });
     }
 
+    document.getElementById('drawer-backdrop')?.addEventListener('click', () => {
+        closeAllDrawers();
+    });
+
     document.addEventListener('click', event => {
         const isClickInsideLeft = (sidebar && sidebar.contains(event.target)) || (menuToggle && menuToggle.contains(event.target));
         const isClickInsideRight = (rightSidebar && rightSidebar.contains(event.target)) || (notepadToggle && notepadToggle.contains(event.target));
         const isClickInsideChapters = (chapterDrawer && chapterDrawer.contains(event.target)) || (chapterToggle && chapterToggle.contains(event.target));
 
+        let changed = false;
         if (!isClickInsideLeft && document.body.classList.contains('sidebar-open')) {
             document.body.classList.remove('sidebar-open');
+            changed = true;
         }
         if (!isClickInsideRight && document.body.classList.contains('right-sidebar-open')) {
             document.body.classList.remove('right-sidebar-open');
+            changed = true;
         }
         if (!isClickInsideChapters && document.body.classList.contains('chapter-drawer-open')) {
-            closeChapterDrawer();
+            document.body.classList.remove('chapter-drawer-open');
+            changed = true;
         }
+        if (changed) syncDrawerAriaExpanded();
     });
 
     document.addEventListener('keydown', event => {
         if (event.key !== 'Escape' || isAnyModalOpen()) return;
-        document.body.classList.remove('sidebar-open', 'right-sidebar-open');
-        closeChapterDrawer();
+        closeAllDrawers();
     });
 }
 
@@ -260,6 +301,66 @@ function populateSearchChapterOptions(filterBar) {
         });
 }
 
+function computeFilteredQuestions(query) {
+    const rawQuery = String(query ?? '');
+    const searchTerm = rawQuery.trim().toLowerCase();
+    const terms = getSearchTerms(searchTerm);
+    const typeFilter = document.getElementById('search-type-filter')?.value || 'all';
+    const scopeFilter = document.getElementById('search-scope-filter')?.value || 'all';
+    const chapterInputs = Array.from(document.querySelectorAll('input[name="search-chapter"]'));
+    const selectedChapters = chapterInputs.filter(input => input.checked).map(input => input.value);
+    const chapterFilterActive = chapterInputs.length > 0 && selectedChapters.length !== chapterInputs.length;
+    const selectedChapterSet = new Set(selectedChapters);
+    const hasActiveSearch = searchTerm.length > 0
+        || typeFilter !== 'all'
+        || scopeFilter !== 'all'
+        || chapterFilterActive;
+
+    const favoriteSet = new Set(state.favorites);
+    const wrongSet = new Set(getWrongAnswerQids(null, { status: 'pending' }));
+    const allQuestions = [...(globalThis.mcq_data || []), ...(globalThis.tf_data || [])];
+
+    const filtered = allQuestions.filter(q => {
+        if (typeFilter !== 'all' && q.type !== typeFilter) return false;
+        if (scopeFilter === 'favorites' && !favoriteSet.has(q.qid)) return false;
+        if (scopeFilter === 'wrong' && !wrongSet.has(q.qid)) return false;
+        if (chapterFilterActive && !selectedChapterSet.has(q.chapter)) return false;
+
+        if (terms.length === 0) return true;
+        const itemText = q._searchText || `${q.question || ''} ${(q.options || []).join(' ')} ${q.answer || ''} ${q.explanation || ''}`.toLowerCase();
+        return terms.every(term => itemText.includes(term));
+    });
+
+    return {
+        rawQuery,
+        searchTerm,
+        terms,
+        typeFilter,
+        scopeFilter,
+        selectedChapters,
+        chapterFilterActive,
+        hasActiveSearch,
+        allQuestionsCount: allQuestions.length,
+        filtered
+    };
+}
+
+export function updateSearchMatchPreview(snapshot = null) {
+    const countEl = document.getElementById('search-match-count');
+    const resetBtn = document.getElementById('search-reset-btn');
+    if (!countEl && !resetBtn) return;
+
+    const info = snapshot || computeFilteredQuestions(document.getElementById('global-search')?.value || '');
+    if (countEl) {
+        countEl.textContent = info.hasActiveSearch
+            ? `已匹配 ${info.filtered.length} 道题目`
+            : `全部题库共 ${info.allQuestionsCount} 道题目`;
+    }
+    if (resetBtn) {
+        resetBtn.disabled = !info.hasActiveSearch;
+    }
+}
+
 export function setupSearchFilters() {
     const searchInput = document.getElementById('global-search');
     const searchContainer = searchInput ? searchInput.closest('.search-container') : null;
@@ -268,6 +369,7 @@ export function setupSearchFilters() {
     const existing = document.getElementById('search-filter-bar');
     if (existing) {
         populateSearchChapterOptions(existing);
+        updateSearchMatchPreview();
         return;
     }
 
@@ -284,7 +386,7 @@ export function setupSearchFilters() {
             <select id="search-scope-filter" aria-label="范围筛选">
                 <option value="all">全部题目</option>
                 <option value="favorites">只搜收藏</option>
-                <option value="wrong">只搜错题</option>
+                <option value="wrong">只搜待复习错题</option>
             </select>
         </div>
         <div class="search-chapter-filter">
@@ -297,9 +399,14 @@ export function setupSearchFilters() {
             </div>
             <div id="search-chapter-options" class="search-chapter-options"></div>
         </div>
+        <div class="search-match-bar">
+            <span id="search-match-count" aria-live="polite"></span>
+            <button type="button" class="text-button" id="search-reset-btn">重置条件</button>
+        </div>
     `;
     searchContainer.appendChild(filterBar);
     populateSearchChapterOptions(filterBar);
+    updateSearchMatchPreview();
 
     filterBar.addEventListener('change', () => {
         filterQuestions(searchInput.value);
@@ -324,6 +431,18 @@ export function setupSearchFilters() {
         filterBar.querySelectorAll('input[name="search-chapter"]').forEach(input => { input.checked = false; });
         filterQuestions(searchInput.value);
     });
+    filterBar.querySelector('#search-reset-btn')?.addEventListener('click', () => {
+        searchInput.value = '';
+        const typeFilter = document.getElementById('search-type-filter');
+        const scopeFilter = document.getElementById('search-scope-filter');
+        if (typeFilter) typeFilter.value = 'all';
+        if (scopeFilter) scopeFilter.value = 'all';
+        filterBar.querySelectorAll('input[name="search-chapter"]').forEach(input => { input.checked = true; });
+        updateSearchMatchPreview();
+        if (state.activeView === 'search') {
+            showHome();
+        }
+    });
 
     // 为搜索输入框绑定防抖与输入法组合保护
     let isComposing = false;
@@ -346,9 +465,13 @@ export function updateChapterNavStatus() {
         const chapterName = detail.dataset.chapterName;
         const wrongBtn = detail.querySelector('.chapter-wrong-button');
         if (!wrongBtn) return;
-        const wrongCount = getWrongAnswerQids(chapterName).length;
-        if (wrongCount > 0) {
-            wrongBtn.textContent = `本章错题 (${wrongCount})`;
+        const pendingCount = getWrongAnswerQids(chapterName, { status: 'pending' }).length;
+        const totalCount = getWrongAnswerQids(chapterName).length;
+        if (pendingCount > 0) {
+            wrongBtn.textContent = `本章错题 (${pendingCount})`;
+            wrongBtn.disabled = false;
+        } else if (totalCount > 0) {
+            wrongBtn.textContent = `本章错题 (已掌握 ${totalCount})`;
             wrongBtn.disabled = false;
         } else {
             wrongBtn.textContent = '本章错题 (0)';
@@ -378,17 +501,17 @@ export function togglePracticeTrackProgress() {
 }
 
 export function togglePendingWrongView() {
-    wrongStatusFilter = wrongStatusFilter === 'pending' ? 'all' : 'pending';
+    state.wrongStatusFilter = state.wrongStatusFilter === 'pending' ? 'all' : 'pending';
     const btn = document.getElementById('toggle-pending-wrong-btn');
     if (btn) {
-        btn.textContent = wrongStatusFilter === 'pending' ? '显示全部错题' : '只看未掌握';
-        btn.setAttribute('aria-pressed', String(wrongStatusFilter === 'pending'));
+        btn.textContent = state.wrongStatusFilter === 'pending' ? '显示全部错题' : '只看未掌握';
+        btn.setAttribute('aria-pressed', String(state.wrongStatusFilter === 'pending'));
     }
 
     if (state.activeView === 'chapter-wrong' && state.activeChapter) {
-        showChapterWrongAnswers(state.activeChapter, state.activeChapterButton);
+        showChapterWrongAnswers(state.activeChapter, state.activeChapterButton, { updateRoute: false });
     } else if (state.activeView === 'all-wrong') {
-        showAllWrongAnswers();
+        showAllWrongAnswers({ updateRoute: false });
     }
 }
 
@@ -427,8 +550,8 @@ export function updateGlobalControls(show, options = {}) {
         const pendingBtn = document.getElementById('toggle-pending-wrong-btn');
         if (pendingBtn) {
             pendingBtn.style.display = 'inline-flex';
-            pendingBtn.textContent = wrongStatusFilter === 'pending' ? '显示全部错题' : '只看未掌握';
-            pendingBtn.setAttribute('aria-pressed', String(wrongStatusFilter === 'pending'));
+            pendingBtn.textContent = state.wrongStatusFilter === 'pending' ? '显示全部错题' : '只看未掌握';
+            pendingBtn.setAttribute('aria-pressed', String(state.wrongStatusFilter === 'pending'));
         }
     }
     if (options.showPracticeTrack) {
@@ -442,6 +565,7 @@ export function updateGlobalControls(show, options = {}) {
     const answerBtn = document.getElementById('toggle-all-answers-btn');
     const favoriteBtn = document.getElementById('toggle-favorites-btn');
     if (answerBtn) {
+        answerBtn.style.display = options.hideAllAnswers ? 'none' : 'inline-flex';
         answerBtn.textContent = '显示全部答案';
         answerBtn.dataset.state = 'hidden';
     }
@@ -521,10 +645,10 @@ export function createNavigationAndContent() {
     const contentArea = document.getElementById('content-area');
     if (contentArea) contentArea.innerHTML = '';
     buildChapterNavigation();
-    showHome();
+    showHome({ updateRoute: false });
 }
 
-export function showHome() {
+export function showHome(options = {}) {
     stopQuestionIndexTracking();
     state.activeView = 'home';
     state.activeChapter = null;
@@ -541,6 +665,7 @@ export function showHome() {
     if (typeFilter) typeFilter.value = 'all';
     if (scopeFilter) scopeFilter.value = 'all';
     document.querySelectorAll('input[name="search-chapter"]').forEach(input => { input.checked = true; });
+    updateSearchMatchPreview();
 
     const mainTitle = document.getElementById('main-title');
     if (mainTitle) mainTitle.textContent = '机械设计基础';
@@ -554,6 +679,10 @@ export function showHome() {
     document.body.classList.add('home-view');
     renderWelcomeOverview();
     document.body.classList.remove('sidebar-open');
+    syncDrawerAriaExpanded();
+    if (options.updateRoute !== false) {
+        syncRouteHash('#/home');
+    }
     window.scrollTo(0, 0);
 }
 
@@ -567,7 +696,7 @@ function findChapterWrongButton(chapter) {
         .find(button => button.dataset.chapter === chapter) || null;
 }
 
-export function showQuestions(chapter, type, btn = null) {
+export function showQuestions(chapter, type, btn = null, options = {}) {
     window.scrollTo(0, 0);
     state.activeView = 'chapter';
     state.activeChapter = chapter;
@@ -595,9 +724,13 @@ export function showQuestions(chapter, type, btn = null) {
     const chapterBucket = state.all_data[chapter];
     const questionsPool = chapterBucket ? (type === 'mcq' ? chapterBucket.mcq : chapterBucket.tf) : [];
     renderQuestions(questionsPool, { mode: 'practice' });
+
+    if (options.updateRoute !== false) {
+        syncRouteHash(`#/chapter/${encodeURIComponent(chapter)}/${encodeURIComponent(type)}`);
+    }
 }
 
-export function showChapterWrongAnswers(chapterName, btn = null) {
+export function showChapterWrongAnswers(chapterName, btn = null, options = {}) {
     window.scrollTo(0, 0);
     state.activeView = 'chapter-wrong';
     state.activeChapter = chapterName;
@@ -616,6 +749,8 @@ export function showChapterWrongAnswers(chapterName, btn = null) {
     if (resolvedBtn) {
         resolvedBtn.classList.add('active');
         state.activeChapterButton = resolvedBtn;
+        const parentDetails = resolvedBtn.closest('details');
+        if (parentDetails) parentDetails.open = true;
     }
 
     const mainTitle = document.getElementById('main-title');
@@ -623,25 +758,37 @@ export function showChapterWrongAnswers(chapterName, btn = null) {
     updateWorkspacePath(`${chapterName} · 错题回顾`);
 
     const allChapterWrong = getWrongAnswerQids(chapterName);
-    const filteredWrong = getWrongAnswerQids(chapterName, { status: wrongStatusFilter });
+    const filteredWrong = getWrongAnswerQids(chapterName, { status: state.wrongStatusFilter });
     const questionsList = filteredWrong.map(qid => state.question_lookup[qid]).filter(Boolean);
     renderQuestions(questionsList, { mode: 'wrong' });
 
     if (questionsList.length === 0) {
-        updateGlobalControls(false);
+        if (allChapterWrong.length > 0 && state.wrongStatusFilter === 'pending') {
+            updateGlobalControls(true, {
+                showChapterWrongClear: true,
+                showPendingWrongFilter: true,
+                hideAllAnswers: true
+            });
+        } else {
+            updateGlobalControls(false);
+        }
         document.body.classList.remove('home-view');
         const contentArea = document.getElementById('content-area');
         if (contentArea) contentArea.innerHTML = '';
         if (welcome) {
             welcome.style.display = 'block';
-            welcome.innerHTML = allChapterWrong.length > 0 && wrongStatusFilter === 'pending'
-                ? '<p class="empty-view-message">本章错题均已达标掌握，可点击上方“显示全部错题”或从“章节目录”切换章节。</p>'
+            welcome.innerHTML = allChapterWrong.length > 0 && state.wrongStatusFilter === 'pending'
+                ? '<p class="empty-view-message">本章错题均已达标掌握，可点击上方“显示全部错题”重温或从“章节目录”切换章节。</p>'
                 : '<p class="empty-view-message">本章没有错题记录，继续保持！</p>';
         }
     }
+
+    if (options.updateRoute !== false) {
+        syncRouteHash(`#/chapter-wrong/${encodeURIComponent(chapterName)}`);
+    }
 }
 
-export function showAllWrongAnswers() {
+export function showAllWrongAnswers(options = {}) {
     window.scrollTo(0, 0);
     state.activeView = 'all-wrong';
     state.activeChapter = null;
@@ -665,25 +812,37 @@ export function showAllWrongAnswers() {
     }
 
     const allWrong = getWrongAnswerQids();
-    const filteredWrong = getWrongAnswerQids(null, { status: wrongStatusFilter });
+    const filteredWrong = getWrongAnswerQids(null, { status: state.wrongStatusFilter });
     const questionsList = filteredWrong.map(qid => state.question_lookup[qid]).filter(Boolean);
     renderQuestions(questionsList, { mode: 'wrong' });
 
     if (questionsList.length === 0) {
-        updateGlobalControls(false);
+        if (allWrong.length > 0 && state.wrongStatusFilter === 'pending') {
+            updateGlobalControls(true, {
+                showAllWrongClear: true,
+                showPendingWrongFilter: true,
+                hideAllAnswers: true
+            });
+        } else {
+            updateGlobalControls(false);
+        }
         document.body.classList.remove('home-view');
         const contentArea = document.getElementById('content-area');
         if (contentArea) contentArea.innerHTML = '';
         if (welcome) {
             welcome.style.display = 'block';
-            welcome.innerHTML = allWrong.length > 0 && wrongStatusFilter === 'pending'
-                ? '<p class="empty-view-message">所有错题均已掌握！</p>'
+            welcome.innerHTML = allWrong.length > 0 && state.wrongStatusFilter === 'pending'
+                ? '<p class="empty-view-message">所有错题均已达标掌握！可点击上方“显示全部错题”进行巩固回顾。</p>'
                 : '<p class="empty-view-message">太棒了！您当前没有任何错题记录。</p>';
         }
     }
+
+    if (options.updateRoute !== false) {
+        syncRouteHash('#/wrong');
+    }
 }
 
-export function showAllFavorites() {
+export function showAllFavorites(options = {}) {
     window.scrollTo(0, 0);
     state.activeView = 'favorites';
     state.activeChapter = null;
@@ -715,30 +874,23 @@ export function showAllFavorites() {
             welcome.innerHTML = '<p class="empty-view-message">你还没有收藏任何题目。</p>';
         }
     }
+
+    if (options.updateRoute !== false) {
+        syncRouteHash('#/favorites');
+    }
 }
 
-export function filterQuestions(query) {
-    const rawQuery = String(query ?? '');
-    const searchTerm = rawQuery.trim().toLowerCase();
-    const terms = getSearchTerms(searchTerm);
-    const typeFilter = document.getElementById('search-type-filter')?.value || 'all';
-    const scopeFilter = document.getElementById('search-scope-filter')?.value || 'all';
-    const chapterInputs = Array.from(document.querySelectorAll('input[name="search-chapter"]'));
-    const selectedChapters = chapterInputs.filter(input => input.checked).map(input => input.value);
-    const chapterFilterActive = chapterInputs.length > 0 && selectedChapters.length !== chapterInputs.length;
-    const selectedChapterSet = new Set(selectedChapters);
-    const hasActiveSearch = searchTerm.length > 0
-        || typeFilter !== 'all'
-        || scopeFilter !== 'all'
-        || chapterFilterActive;
+export function filterQuestions(query, options = {}) {
+    const info = computeFilteredQuestions(query);
+    updateSearchMatchPreview(info);
 
     if (state.activeChapterButton) {
         state.activeChapterButton.classList.remove('active');
         state.activeChapterButton = null;
     }
 
-    if (!hasActiveSearch) {
-        showHome();
+    if (!info.hasActiveSearch) {
+        showHome({ updateRoute: options.updateRoute });
         return;
     }
 
@@ -752,42 +904,108 @@ export function filterQuestions(query) {
 
     const mainTitle = document.getElementById('main-title');
     if (mainTitle) {
-        mainTitle.textContent = searchTerm.length > 0 ? `搜索结果: "${rawQuery.trim()}"` : '筛选结果';
+        mainTitle.textContent = info.searchTerm.length > 0 ? `搜索结果: "${info.rawQuery.trim()}"` : '筛选结果';
     }
-    updateWorkspacePath(searchTerm.length > 0 ? `检索 · ${rawQuery.trim()}` : '题库筛选结果');
+    updateWorkspacePath(info.searchTerm.length > 0 ? `检索 · ${info.rawQuery.trim()}` : '题库筛选结果');
 
-    // 在循环外预处理 Set，避免 O(N^2) 重复扫描错题和收藏数组
-    const favoriteSet = new Set(state.favorites);
-    const wrongSet = new Set(getWrongAnswerQids());
-    const allQuestions = [...(globalThis.mcq_data || []), ...(globalThis.tf_data || [])];
-
-    const filtered = allQuestions.filter(q => {
-        if (typeFilter !== 'all' && q.type !== typeFilter) return false;
-        if (scopeFilter === 'favorites' && !favoriteSet.has(q.qid)) return false;
-        if (scopeFilter === 'wrong' && !wrongSet.has(q.qid)) return false;
-        if (chapterFilterActive && !selectedChapterSet.has(q.chapter)) return false;
-
-        if (terms.length === 0) return true;
-        const itemText = q._searchText || `${q.question || ''} ${(q.options || []).join(' ')} ${q.answer || ''} ${q.explanation || ''}`.toLowerCase();
-        return terms.every(term => itemText.includes(term));
+    renderQuestions(info.filtered, {
+        searchTerms: info.terms,
+        mode: info.scopeFilter === 'wrong' ? 'wrong' : 'search'
     });
 
-    renderQuestions(filtered, {
-        searchTerms: terms,
-        mode: scopeFilter === 'wrong' ? 'wrong' : 'search'
-    });
-
-    if (filtered.length === 0) {
+    if (info.filtered.length === 0) {
         updateGlobalControls(false);
         document.body.classList.remove('home-view');
         const contentArea = document.getElementById('content-area');
         if (contentArea) contentArea.innerHTML = '';
         if (welcome) {
             welcome.style.display = 'block';
-            welcome.innerHTML = searchTerm.length > 0
-                ? `<p class="empty-view-message">未找到包含 "${escapeHtml(rawQuery.trim())}" 的题目。</p>`
+            welcome.innerHTML = info.searchTerm.length > 0
+                ? `<p class="empty-view-message">未找到包含 "${escapeHtml(info.rawQuery.trim())}" 的题目。</p>`
                 : '<p class="empty-view-message">未找到符合当前筛选条件的题目。</p>';
         }
+    }
+
+    if (options.updateRoute !== false) {
+        const params = new URLSearchParams();
+        if (info.rawQuery.trim()) params.set('q', info.rawQuery.trim());
+        if (info.typeFilter !== 'all') params.set('type', info.typeFilter);
+        if (info.scopeFilter !== 'all') params.set('scope', info.scopeFilter);
+        if (info.chapterFilterActive) params.set('chapters', info.selectedChapters.join('|'));
+        syncRouteHash(`#/search?${params.toString()}`, true);
+    }
+}
+
+export function applyRouteFromHash() {
+    if (typeof window === 'undefined' || !window.location) return;
+    const rawHash = (window.location.hash || '').replace(/^#/, '');
+    isApplyingRoute = true;
+    try {
+        if (!rawHash || rawHash === '/' || rawHash === '/home') {
+            showHome({ updateRoute: false });
+            return;
+        }
+        if (rawHash === '/wrong') {
+            showAllWrongAnswers({ updateRoute: false });
+            return;
+        }
+        if (rawHash === '/favorites') {
+            showAllFavorites({ updateRoute: false });
+            return;
+        }
+        if (rawHash.startsWith('/chapter/')) {
+            const parts = rawHash.slice('/chapter/'.length).split('/');
+            const chapter = decodeURIComponent(parts[0] || '');
+            const type = parts[1] === 'tf' ? 'tf' : 'mcq';
+            if (state.all_data[chapter]) {
+                showQuestions(chapter, type, null, { updateRoute: false });
+                return;
+            }
+        }
+        if (rawHash.startsWith('/chapter-wrong/')) {
+            const chapter = decodeURIComponent(rawHash.slice('/chapter-wrong/'.length));
+            if (state.all_data[chapter]) {
+                showChapterWrongAnswers(chapter, null, { updateRoute: false });
+                return;
+            }
+        }
+        if (rawHash.startsWith('/search')) {
+            const queryPart = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : '';
+            const params = new URLSearchParams(queryPart);
+            const q = params.get('q') || '';
+            const type = params.get('type') || 'all';
+            const scope = params.get('scope') || 'all';
+            const chaptersParam = params.get('chapters');
+            const selectedSet = chaptersParam !== null ? new Set(chaptersParam.split('|').filter(Boolean)) : null;
+
+            const searchInput = document.getElementById('global-search');
+            const typeSelect = document.getElementById('search-type-filter');
+            const scopeSelect = document.getElementById('search-scope-filter');
+            if (searchInput) searchInput.value = q;
+            if (typeSelect) typeSelect.value = ['all', 'mcq', 'tf'].includes(type) ? type : 'all';
+            if (scopeSelect) scopeSelect.value = ['all', 'favorites', 'wrong'].includes(scope) ? scope : 'all';
+            if (selectedSet) {
+                document.querySelectorAll('input[name="search-chapter"]').forEach(input => {
+                    input.checked = selectedSet.has(input.value);
+                });
+            }
+            filterQuestions(q, { updateRoute: false });
+            return;
+        }
+        showHome({ updateRoute: false });
+    } finally {
+        isApplyingRoute = false;
+    }
+}
+
+export function initRouteListener() {
+    if (typeof window === 'undefined') return;
+    if (!routeListenerBound) {
+        routeListenerBound = true;
+        window.addEventListener('hashchange', applyRouteFromHash);
+    }
+    if (window.location.hash && window.location.hash !== '#/home') {
+        applyRouteFromHash();
     }
 }
 
@@ -809,30 +1027,31 @@ export function refreshQuestionChangeViews() {
     setupSearchFilters();
 
     if (prevView === 'chapter' && prevChapter && prevType && state.all_data[prevChapter]) {
-        showQuestions(prevChapter, prevType);
+        showQuestions(prevChapter, prevType, null, { updateRoute: false });
         return;
     }
     if (prevView === 'chapter-wrong' && prevChapter && state.all_data[prevChapter]) {
-        showChapterWrongAnswers(prevChapter);
+        showChapterWrongAnswers(prevChapter, null, { updateRoute: false });
         return;
     }
     if (prevView === 'all-wrong') {
-        showAllWrongAnswers();
+        showAllWrongAnswers({ updateRoute: false });
         return;
     }
     if (prevView === 'favorites') {
-        showAllFavorites();
+        showAllFavorites({ updateRoute: false });
         return;
     }
     if (prevView === 'search') {
-        filterQuestions(document.getElementById('global-search')?.value || '');
+        filterQuestions(document.getElementById('global-search')?.value || '', { updateRoute: false });
         return;
     }
 
-    showHome();
+    showHome({ updateRoute: false });
 }
 
 export function openSearchModal() {
+    updateSearchMatchPreview();
     openModal('search-modal', { focusSelector: '#global-search' });
 }
 
@@ -866,10 +1085,8 @@ export function downloadNotepadTxt() {
 
 export function toggleRightSidebar() {
     document.body.classList.toggle('right-sidebar-open');
-    if (document.body.classList.contains('sidebar-open')) {
-        document.body.classList.remove('sidebar-open');
-    }
-    closeChapterDrawer();
+    document.body.classList.remove('sidebar-open', 'chapter-drawer-open');
+    syncDrawerAriaExpanded();
 }
 
 export async function clearAllWrongAnswers() {
@@ -931,32 +1148,41 @@ export async function removeSingleWrongAnswer(qid, chapter, btn) {
 }
 
 export function toggleFavorite(qid, btn) {
-    if (!qid || !btn) return;
+    if (!qid) return;
     const index = state.favorites.indexOf(qid);
-    if (index > -1) {
+    const nextFav = index === -1;
+
+    if (nextFav) {
+        state.favorites.push(qid);
+    } else {
         state.favorites.splice(index, 1);
-        btn.classList.remove('favorited');
-        btn.innerHTML = '<i data-lucide="star"></i> 收藏';
-        renderIcons(btn);
+    }
+
+    // 同步文档中所有指向该 qid 的收藏按钮（含底层题卡与测验弹窗）
+    document.querySelectorAll('[data-action="toggleFavorite"]').forEach(targetBtn => {
+        if (targetBtn.dataset.qid !== qid) return;
+        targetBtn.classList.toggle('favorited', nextFav);
+        targetBtn.innerHTML = nextFav ? '<i data-lucide="star"></i> 已收藏' : '<i data-lucide="star"></i> 收藏';
+        renderIcons(targetBtn);
+    });
+
+    if (!nextFav) {
+        const listBlock = Array.from(document.querySelectorAll('.question-list .question-block'))
+            .find(el => el.dataset.qid === qid) || btn?.closest('.question-block');
 
         if (state.activeView === 'favorites') {
-            const block = btn.closest('.question-block');
-            if (block) block.remove();
+            if (listBlock) listBlock.remove();
             removeQuestionFromIndex(qid);
             if (state.favorites.length === 0) {
                 showAllFavorites();
             }
         } else if (document.getElementById('toggle-favorites-btn')?.dataset.state === 'favorites') {
-            const block = btn.closest('.question-block');
-            if (block) block.style.display = 'none';
+            if (listBlock) listBlock.style.display = 'none';
             syncQuestionIndexVisibility();
         }
-    } else {
-        state.favorites.push(qid);
-        btn.classList.add('favorited');
-        btn.innerHTML = '<i data-lucide="star"></i> 已收藏';
-        renderIcons(btn);
     }
+
     saveFavorites();
     syncQuestionIndexMarkers();
+    updateSearchMatchPreview();
 }

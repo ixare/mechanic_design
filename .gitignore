@@ -1,0 +1,10 @@
+# Serena
+.serena/
+AGENTS.md
+styles.css.bak
+docs/
+.agents/
+tmp/
+.playwright-cli/
+node_modules/
+.DS_Store

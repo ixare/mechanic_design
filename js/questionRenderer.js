@@ -22,6 +22,7 @@ let questionIndexView = 'list';
 let questionIndexObserver = null;
 let questionIndexScrollEndHandler = null;
 let activeIndexButton = null;
+const scoredInSession = new Set();
 
 function getWrongStatusLabel(status) {
     const labels = {
@@ -132,17 +133,20 @@ export function setQuestionIndexView(view) {
 
 export function syncQuestionIndexMarkers() {
     const favoriteQids = new Set(state.favorites);
-    const wrongQids = new Set(getWrongAnswerQids());
+    const pendingWrongQids = new Set(getWrongAnswerQids(null, { status: 'pending' }));
+    const indexContainer = document.querySelector('.question-index-items');
     document.querySelectorAll('.question-index-item').forEach(button => {
         const isFavorite = favoriteQids.has(button.dataset.qid);
-        const isWrong = wrongQids.has(button.dataset.qid);
+        const isWrong = pendingWrongQids.has(button.dataset.qid);
         const status = button.querySelector('.question-index-status');
         if (!status) return;
         status.innerHTML = `${isFavorite ? '<i data-lucide="star" class="question-index-favorite"></i>' : ''}${isWrong ? '<i data-lucide="circle-alert" class="question-index-wrong"></i>' : ''}`;
-        renderIcons(status);
-        const labels = [isFavorite && '已收藏', isWrong && '错题'].filter(Boolean);
+        const labels = [isFavorite && '已收藏', isWrong && '待复习错题'].filter(Boolean);
         button.setAttribute('aria-label', `第 ${button.dataset.number} 题：${button.title}${labels.length ? `（${labels.join('、')}）` : ''}`);
     });
+    if (indexContainer) {
+        renderIcons(indexContainer);
+    }
 }
 
 export function syncQuestionIndexVisibility() {
@@ -207,8 +211,24 @@ export function toggleQuestionIndexCollapse(btn) {
     }
 }
 
+function ensureExplanationRendered(block) {
+    if (!block) return false;
+    const explanationSpan = block.querySelector('.explanation-span');
+    if (!explanationSpan) return false;
+
+    if (explanationSpan.dataset.rendered !== 'true') {
+        const item = state.question_lookup[block.dataset.qid];
+        const explanationHtml = renderMarkdown(item?.explanation);
+        explanationSpan.innerHTML = explanationHtml
+            ? `<div class="explanation-title">题目解析</div><div class="explanation-body">${explanationHtml}</div>`
+            : '';
+        explanationSpan.dataset.rendered = 'true';
+    }
+    return Boolean(explanationSpan.textContent.trim());
+}
+
 /**
- * 统一控制题卡答案与解析的显隐状态
+ * 统一控制题卡答案与解析的显隐状态（解析内容按需懒渲染）
  */
 export function setQuestionAnswerVisibility(block, show, options = {}) {
     if (!block) return;
@@ -220,7 +240,7 @@ export function setQuestionAnswerVisibility(block, show, options = {}) {
         answerSpan.style.display = show ? 'inline-flex' : 'none';
     }
     if (explanationSpan) {
-        const hasBody = Boolean(explanationSpan.textContent.trim());
+        const hasBody = show ? ensureExplanationRendered(block) : Boolean(explanationSpan.textContent.trim());
         explanationSpan.style.display = show && hasBody ? 'block' : 'none';
         if (show && hasBody && !options.skipTypeset) {
             typesetMath([explanationSpan]);
@@ -234,7 +254,6 @@ export function setQuestionAnswerVisibility(block, show, options = {}) {
         renderIcons(toggleBtn);
     }
     if (!show) {
-        delete block.dataset.practiced;
         block.querySelectorAll('.practice-option-btn').forEach(btn => {
             btn.classList.remove('is-selected', 'is-correct', 'is-wrong');
             btn.setAttribute('aria-pressed', 'false');
@@ -274,8 +293,9 @@ export function selectPracticeOption(optionBtn, onProgressChange = null) {
         optionBtn.classList.add('is-wrong');
     }
 
-    // 练习卡首次选择时记录统计与错题（若用户开启了练习自动计入进度）
-    if (state.practiceTrackProgress && block.dataset.practiced !== 'true') {
+    // 练习卡在本页浏览会话内首次作答时计入统计与错题，防止隐藏答案后重复刷题刷高连续正确数
+    if (state.practiceTrackProgress && !scoredInSession.has(item.qid)) {
+        scoredInSession.add(item.qid);
         block.dataset.practiced = 'true';
         updateStats(item, isCorrect);
         if (isCorrect) {
@@ -356,7 +376,6 @@ export function createQuestionBlock(item, options = {}) {
     if (hasLocalEdit) block.classList.add('has-local-edit');
     if (hasLocalAddition) block.classList.add('has-local-addition');
 
-    const explanationHtml = renderMarkdown(item.explanation);
     const isFav = state.favorites.includes(item.qid);
     const wrongRecord = (state.wrongAnswersByChapter[item.chapter] || {})[item.qid];
     const searchTerms = options.searchTerms || [];
@@ -436,7 +455,7 @@ export function createQuestionBlock(item, options = {}) {
             <button type="button" class="action-button favorite-button ${isFav ? 'favorited' : ''}" data-qid="${escapeAttr(item.qid)}" data-action="toggleFavorite">${isFav ? '<i data-lucide="star"></i> 已收藏' : '<i data-lucide="star"></i> 收藏'}</button>
             <button type="button" class="action-button edit-question-button action-button--ghost" data-qid="${escapeAttr(item.qid)}" data-action="${editAction}"><i data-lucide="square-pen"></i> ${editLabel}</button>
             <button type="button" class="action-button remove-wrong-answer-btn action-button--danger-ghost" data-qid="${escapeAttr(item.qid)}" data-chapter="${escapeAttr(item.chapter)}" data-action="removeWrongAnswer" style="display:${showRemoveBtn ? 'inline-flex' : 'none'};"><i data-lucide="trash-2"></i> 移除此题</button>
-            <div class="explanation-span">${explanationHtml ? `<div class="explanation-title">题目解析</div><div class="explanation-body">${explanationHtml}</div>` : ''}</div>
+            <div class="explanation-span" data-rendered="false"></div>
         </div>
     `;
 
@@ -446,6 +465,7 @@ export function createQuestionBlock(item, options = {}) {
 export function renderQuestions(questionsList, options = {}) {
     const contentArea = document.getElementById('content-area');
     stopQuestionIndexTracking();
+    scoredInSession.clear();
     if (!contentArea) return [];
 
     contentArea.innerHTML = '';

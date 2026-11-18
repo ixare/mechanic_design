@@ -22,7 +22,11 @@ export function renderWelcomeOverview() {
     const displayPracticed = practicedUnique > 0 || completedAttempts === 0 ? practicedUnique : completedAttempts;
     const practicedLabel = practicedUnique > 0 || completedAttempts === 0 ? '已覆盖题数' : '累计练习';
     const accuracy = completedAttempts ? Math.round((state.userStats.correct / completedAttempts) * 100) : 0;
-    const wrongCount = getWrongAnswerQids().length;
+    const pendingWrongCount = getWrongAnswerQids(null, { status: 'pending' }).length;
+    const totalWrongCount = getWrongAnswerQids().length;
+    const wrongBtnLabel = pendingWrongCount > 0
+        ? `错题本 (${pendingWrongCount})`
+        : `错题本 (已掌握 ${totalWrongCount})`;
     const firstChapter = chapters.find(chapter => state.all_data[chapter].mcq.length) || chapters[0];
     const lastStudy = getLastStudyLocation();
     const hasValidLastStudy = Boolean(
@@ -37,7 +41,7 @@ export function renderWelcomeOverview() {
     const accuracyMetricClass = completedAttempts > 0
         ? (accuracy >= 80 ? 'metric-success' : (accuracy < 60 ? 'metric-warn' : ''))
         : '';
-    const wrongMetricClass = wrongCount > 0 ? 'metric-accent' : '';
+    const wrongMetricClass = pendingWrongCount > 0 ? 'metric-accent' : '';
 
     welcome.innerHTML = `
         <section class="welcome-stage" aria-label="练习概览">
@@ -49,14 +53,14 @@ export function renderWelcomeOverview() {
                     <div class="stage-actions">
                         <button type="button" class="stage-primary" data-action="showQuestions" data-chapter="${escapeAttr(primaryChapter)}" data-type="${escapeAttr(primaryType)}">${escapeHtml(primaryCtaText)} <i data-lucide="arrow-right"></i></button>
                         <button type="button" class="stage-secondary" data-action="startMockExam"><i data-lucide="timer"></i> 模拟考试</button>
-                        ${wrongCount > 0 ? `<button type="button" class="stage-secondary stage-wrong-btn" data-action="showAllWrongAnswers"><i data-lucide="book-open-check"></i> 错题本 (${wrongCount})</button>` : ''}
+                        ${totalWrongCount > 0 ? `<button type="button" class="stage-secondary stage-wrong-btn" data-action="showAllWrongAnswers"><i data-lucide="book-open-check"></i> ${escapeHtml(wrongBtnLabel)}</button>` : ''}
                     </div>
                 </div>
                 <div class="stage-metrics">
                     <div><strong>${totalQuestions}</strong><span>题库总量</span></div>
                     <div title="累计答题 ${completedAttempts} 人次"><strong id="home-practiced-metric">${displayPracticed}</strong><span>${practicedLabel}</span></div>
                     <div><strong class="${accuracyMetricClass}">${accuracy}%</strong><span>练习正确率</span></div>
-                    <div><strong class="${wrongMetricClass}">${wrongCount}</strong><span>待复习错题</span></div>
+                    <div title="历史累计错题 ${totalWrongCount} 道（含已掌握）"><strong class="${wrongMetricClass}">${pendingWrongCount}</strong><span>待复习错题</span></div>
                 </div>
             </div>
             <div class="mechanism-visual">
@@ -72,7 +76,7 @@ export function renderWelcomeOverview() {
                 ${chapters.map((chapter, index) => {
                     const group = state.all_data[chapter];
                     const count = group.mcq.length + group.tf.length;
-                    const chapterWrong = getWrongAnswerQids(chapter).length;
+                    const chapterWrong = getWrongAnswerQids(chapter, { status: 'pending' }).length;
                     const isLastStudied = hasValidLastStudy && lastStudy.chapter === chapter;
                     const label = chapter.replace(/^第[^章]+章\s*/, '');
                     return `<div class="chapter-row ${isLastStudied ? 'is-last-studied' : ''}">

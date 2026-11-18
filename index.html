@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#25547a">
     <title>机械设计基础 | 课程题库与自测</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="alternate icon" href="favicon.svg">
+    <link rel="manifest" href="manifest.webmanifest">
     <script>
         (function () {
             try {
@@ -24,21 +26,22 @@
           tex: {
             inlineMath: [['$', '$'], ['\\(', '\\)']]
           },
-          svg: {
-            fontCache: 'global'
+          options: {
+            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
           }
         };
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" crossorigin="anonymous"></script>
-    
+    <link rel="stylesheet" href="styles.css">
+
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer crossorigin="anonymous"></script>
-    
-    <link rel="stylesheet" href="styles.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" id="MathJax-script" async crossorigin="anonymous" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" defer crossorigin="anonymous" integrity="sha384-cwS6YdhLI7XS60eoDiC+egV0qHp8zI+Cms46R0nbn8JrmoAzV9uFL60etMZhAnSu"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" defer crossorigin="anonymous" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js" defer crossorigin="anonymous" integrity="sha384-uTYyvsSSUZeaPhb5RbKlQa0zY/WpX/QHfvg2mczXyBQOpkWPEDy9lczyp+w7SKXu"></script>
 </head>
 <body>
 
@@ -89,19 +92,21 @@
     </div>
 </div>
 
+    <div id="drawer-backdrop" class="drawer-backdrop" aria-hidden="true"></div>
+
     <div id="main-content">
     <div class="main-container">
         <header class="workspace-chrome">
             <div class="workspace-topbar">
                 <div class="topbar-leading">
-                    <button id="menu-toggle" class="topbar-icon-btn mobile-menu-btn" type="button" aria-label="打开导航" title="打开导航"><i data-lucide="menu"></i></button>
+                    <button id="menu-toggle" class="topbar-icon-btn mobile-menu-btn" type="button" aria-label="打开导航" title="打开导航" aria-expanded="false"><i data-lucide="menu"></i></button>
                     <button id="sidebar-collapse-toggle" class="topbar-icon-btn" type="button" aria-label="收起左侧导航" title="收起左侧导航（专注刷题）" aria-pressed="false"><i data-lucide="panel-left-close"></i></button>
                     <span class="workspace-path">机械设计基础 · 课程复习题库</span>
                 </div>
                 <div class="topbar-actions">
                     <button id="chapter-drawer-toggle" class="topbar-button" type="button" aria-expanded="false" aria-controls="chapter-drawer" title="切换章节与查看本章错题"><i data-lucide="layers"></i><span>章节目录</span></button>
                     <button class="topbar-search" type="button" data-action="openSearchModal" title="搜索题库"><i data-lucide="search"></i><span>搜索题库</span><kbd>/</kbd></button>
-                    <button id="notepad-toggle" class="topbar-button" type="button" aria-label="打开随手记" title="打开随手记"><i data-lucide="notebook-pen"></i><span>随手记</span></button>
+                    <button id="notepad-toggle" class="topbar-button" type="button" aria-label="打开随手记" title="打开随手记" aria-expanded="false" aria-controls="right-sidebar"><i data-lucide="notebook-pen"></i><span>随手记</span></button>
                 </div>
             </div>
 
@@ -133,7 +138,7 @@
     </div>
 </div>
 
-<div id="question-entry-modal" class="modal">
+<div id="question-entry-modal" class="modal" aria-hidden="true">
     <div class="modal-content question-entry-panel">
         <button class="close-modal" type="button" id="close-question-entry" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2 id="question-entry-title"><i data-lucide="square-plus"></i> 录入新题</h2>
@@ -182,7 +187,7 @@
     </div>
 </div>
 
-<div id="question-edit-modal" class="modal">
+<div id="question-edit-modal" class="modal" aria-hidden="true">
     <div class="modal-content question-edit-panel">
         <button class="close-modal" type="button" id="close-question-edit" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2><i data-lucide="square-pen"></i> 编辑题目</h2>
@@ -217,7 +222,7 @@
     </div>
 </div>
 
-<div id="question-edit-manager-modal" class="modal">
+<div id="question-edit-manager-modal" class="modal" aria-hidden="true">
     <div class="modal-content question-edit-manager-panel">
         <button class="close-modal" type="button" id="close-question-edit-manager" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2><i data-lucide="file-pen-line"></i> 题目修订/录入</h2>
@@ -233,7 +238,7 @@
     </div>
 </div>
 
-<div id="question-notice-modal" class="modal">
+<div id="question-notice-modal" class="modal" aria-hidden="true">
     <div class="modal-content question-notice-panel">
         <h2><i data-lucide="info"></i> 题库说明</h2>
         <div class="notice-copy">
@@ -246,7 +251,7 @@
     </div>
 </div>
 
-<div id="search-modal" class="modal">
+<div id="search-modal" class="modal" aria-hidden="true">
     <div class="modal-content search-modal-panel">
         <button class="close-modal" type="button" id="close-search-modal" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2><i data-lucide="search"></i> 全局搜索</h2>
@@ -258,7 +263,7 @@
     </div>
 </div>
 
-<div id="quiz-modal">
+<div id="quiz-modal" aria-hidden="true">
     <div id="quiz-container">
         <button id="close-quiz" type="button" data-action="closeQuiz" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <div id="quiz-timer" style="display: none;"></div>
@@ -266,8 +271,12 @@
         <div id="quiz-content" style="display: none;">
             <div class="quiz-toolbar">
                 <div id="quiz-progress"></div>
-                <button id="quiz-favorite-btn" class="action-button favorite-button" style="display:none;"></button>
+                <div class="quiz-toolbar-actions">
+                    <button id="quiz-flag-btn" type="button" class="action-button" style="display:none;"><i data-lucide="flag"></i> 标记存疑</button>
+                    <button id="quiz-favorite-btn" type="button" class="action-button favorite-button" style="display:none;"></button>
+                </div>
             </div>
+            <div id="quiz-sheet-nav" class="quiz-sheet-nav" style="display:none;" aria-label="考卷题号导航"></div>
             <div id="quiz-question-container">
                 <p class="keyboard-instructions" id="keyboard-instructions"></p>
                 <p id="quiz-question-text"></p>
@@ -275,8 +284,10 @@
             </div>
             <div id="quiz-feedback"></div>
             <div class="quiz-footer-actions">
-                <button id="submit-answer-btn" class="quiz-button">提交答案</button>
-                <button id="next-question-btn" class="quiz-button" style="display:none;">下一题</button>
+                <button id="prev-question-btn" type="button" class="action-button" style="display:none;">上一题</button>
+                <button id="submit-answer-btn" type="button" class="quiz-button">提交答案</button>
+                <button id="next-question-btn" type="button" class="quiz-button" style="display:none;">下一题</button>
+                <button id="finish-exam-btn" type="button" class="quiz-button" style="display:none;">交卷结算</button>
             </div>
         </div>
         <div id="quiz-score" style="display:none;"></div>
@@ -301,7 +312,7 @@
     </div>
 </div>
 
-<div id="dashboard-modal" class="modal">
+<div id="dashboard-modal" class="modal" aria-hidden="true">
     <div class="modal-content">
         <button class="close-modal" type="button" id="close-dashboard" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2><i data-lucide="chart-pie"></i> 学习进度统计</h2>
@@ -325,7 +336,7 @@
     </div>
 </div>
 
-<div id="cropper-modal" class="modal">
+<div id="cropper-modal" class="modal" aria-hidden="true">
     <div class="modal-content cropper-modal-panel">
         <button class="close-modal" type="button" id="close-cropper" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2>裁剪背景图片</h2>
@@ -340,7 +351,7 @@
     </div>
 </div>
 
-<div id="data-modal" class="modal">
+<div id="data-modal" class="modal" aria-hidden="true">
     <div class="modal-content data-modal-panel">
         <button class="close-modal" type="button" id="close-data-sync" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2><i data-lucide="database"></i> 数据备份与恢复</h2>
@@ -356,7 +367,7 @@
     </div>
 </div>
 
-<div id="feedback-modal" class="modal">
+<div id="feedback-modal" class="modal" aria-hidden="true">
     <div class="modal-content feedback-modal-panel">
         <button class="close-modal" type="button" id="close-feedback" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
         <h2><i data-lucide="message-circle"></i> 意见反馈</h2>

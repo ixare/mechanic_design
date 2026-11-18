@@ -7,6 +7,7 @@ import {
     changeTheme,
     copyExportData,
     exportData,
+    flushNotepad,
     importData,
     importDataFile,
     loadFavorites,
@@ -27,11 +28,13 @@ import { setupFeedbackHandlers, showFeedbackModal } from './js/feedback.js';
 import {
     clearAllWrongAnswers,
     clearCurrentChapterWrongAnswers,
+    closeAllDrawers,
     closeChapterDrawer,
     closeDataSync,
     closeSearchModal,
     createNavigationAndContent,
     downloadNotepadTxt,
+    initRouteListener,
     jumpToQuestion,
     openSearchModal,
     refreshQuestionChangeViews,
@@ -84,13 +87,17 @@ import {
 } from './js/questionEditUI.js';
 import {
     closeQuiz,
+    finishExamQuiz,
+    jumpToQuizQuestion,
     nextQuizQuestion,
     openRandomTestSetup,
+    prevQuizQuestion,
     startAllWrongAnswersTest,
     startChapterTest,
     startCurrentChapterWrongAnswersTest,
     startLastWrongQuizTest,
-    submitQuizAnswer
+    submitQuizAnswer,
+    toggleQuizFlag
 } from './js/quiz.js';
 
 const QUESTION_NOTICE_KEY = 'mech_design_question_notice_2026_07_02';
@@ -135,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupMobileMenu();
     setupSearchFilters();
     createNavigationAndContent();
+    initRouteListener();
     syncFontScaleButtons(initialScale);
     syncDesktopSidebarButton();
     setupStickyChromeBehavior();
@@ -188,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'startMockExam': openRandomTestSetup('exam'); break;
             case 'startOverallTestMcq': openRandomTestSetup('mcq'); break;
             case 'startOverallTestTf': openRandomTestSetup('tf'); break;
-            case 'startAllWrongAnswersTest': startAllWrongAnswersTest(); break;
             case 'startLastWrongQuizTest': startLastWrongQuizTest(); break;
             case 'showDashboard': showDashboard(); break;
             case 'showAllFavorites': showAllFavorites(); break;
@@ -226,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('chapter-drawer-toggle')?.addEventListener('click', () => toggleChapterDrawer());
     document.getElementById('close-chapter-drawer')?.addEventListener('click', closeChapterDrawer);
     document.getElementById('sidebar-collapse-toggle')?.addEventListener('click', toggleDesktopSidebar);
-    document.getElementById('sidebar-close')?.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+    document.getElementById('sidebar-close')?.addEventListener('click', closeAllDrawers);
 
     document.getElementById('test-chapter-wrong-btn')?.addEventListener('click', startCurrentChapterWrongAnswersTest);
     document.getElementById('clear-chapter-wrong-answers-btn')?.addEventListener('click', clearCurrentChapterWrongAnswers);
@@ -285,14 +292,33 @@ document.addEventListener('DOMContentLoaded', () => {
         importDataFile(this.files[0], handleBackupImported);
         this.value = '';
     });
+    document.getElementById('prev-question-btn')?.addEventListener('click', prevQuizQuestion);
     document.getElementById('submit-answer-btn')?.addEventListener('click', () => submitQuizAnswer(false));
     document.getElementById('next-question-btn')?.addEventListener('click', nextQuizQuestion);
+    document.getElementById('finish-exam-btn')?.addEventListener('click', finishExamQuiz);
+    document.getElementById('quiz-flag-btn')?.addEventListener('click', toggleQuizFlag);
+    document.getElementById('quiz-sheet-nav')?.addEventListener('click', event => {
+        const jumpBtn = event.target.closest('button[data-quiz-jump]');
+        if (jumpBtn) {
+            jumpToQuizQuestion(jumpBtn.dataset.quizJump);
+        }
+    });
 
     document.getElementById('wallpaper-upload')?.addEventListener('change', function () {
         handleWallpaperUpload(this);
     });
 
     document.getElementById('notepad')?.addEventListener('input', saveNotepad);
+    window.addEventListener('pagehide', flushNotepad);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) flushNotepad();
+    });
+
+    if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(window.location.hostname))) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch(() => {});
+        }, { once: true });
+    }
 });
 
 // 监听键盘事件：支持 `/` 呼出搜索以及答题弹窗快速作答（同时不劫持聚焦在交互按钮上的原生回车/空格）
@@ -316,47 +342,70 @@ window.addEventListener('keydown', function (event) {
         let handled = false;
 
         if (state.quizState === 'ANSWERING' && question) {
+            const options = Array.from(document.querySelectorAll('input[name="quizOption"]'));
+            let matchedRadio = null;
+
             if (question.type === 'mcq') {
-                if (['A', 'B', 'C', 'D'].includes(key) || ['1', '2', '3', '4'].includes(key)) {
-                    const mapIndex = ['1', '2', '3', '4'].includes(key) ? parseInt(key, 10) - 1 : ['A', 'B', 'C', 'D'].indexOf(key);
-                    const options = document.querySelectorAll('input[name="quizOption"]');
-                    if (options[mapIndex]) options[mapIndex].checked = true;
-                    handled = true;
+                if (/^[1-9]$/.test(key)) {
+                    const mapIndex = parseInt(key, 10) - 1;
+                    if (mapIndex >= 0 && mapIndex < options.length) {
+                        matchedRadio = options[mapIndex];
+                    }
+                } else if (/^[A-Z]$/.test(key)) {
+                    matchedRadio = options.find(opt => String(opt.value || '').trim().toUpperCase() === key) || null;
                 }
             } else if (question.type === 'tf') {
-                const options = document.querySelectorAll('input[name="quizOption"]');
                 if (['T', '1', 'A'].includes(key)) {
-                    if (options[0]) options[0].checked = true;
-                    handled = true;
+                    matchedRadio = options[0] || null;
                 } else if (['F', '2', 'B'].includes(key)) {
-                    if (options[1]) options[1].checked = true;
-                    handled = true;
+                    matchedRadio = options[1] || null;
                 }
+            }
+
+            if (matchedRadio) {
+                matchedRadio.checked = true;
+                matchedRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                handled = true;
             }
         }
 
         const activeEl = document.activeElement;
         const isActionFocused = activeEl instanceof HTMLElement
             && activeEl.matches('button, summary, a')
-            && !['submit-answer-btn', 'next-question-btn'].includes(activeEl.id);
+            && !['submit-answer-btn', 'next-question-btn', 'prev-question-btn', 'finish-exam-btn'].includes(activeEl.id);
 
-        if (!isActionFocused && (event.code === 'Space' || key === ' ')) {
-            if (state.quizState === 'ANSWERING') {
+        if (state.quizDelivery === 'sheet' && !state.quizFinalized) {
+            if (event.key === 'ArrowLeft') {
+                prevQuizQuestion();
                 handled = true;
-                submitQuizAnswer(true);
-            } else if (state.quizState === 'FEEDBACK') {
-                handled = true;
+            } else if (event.key === 'ArrowRight') {
                 nextQuizQuestion();
+                handled = true;
+            } else if (!isActionFocused && (event.code === 'Space' || key === ' ' || key === 'ENTER')) {
+                if (state.currentQuestionIndex < state.quizLength - 1) {
+                    nextQuizQuestion();
+                }
+                handled = true;
             }
-        }
+        } else {
+            if (!isActionFocused && (event.code === 'Space' || key === ' ')) {
+                if (state.quizState === 'ANSWERING') {
+                    handled = true;
+                    submitQuizAnswer(true);
+                } else if (state.quizState === 'FEEDBACK') {
+                    handled = true;
+                    nextQuizQuestion();
+                }
+            }
 
-        if (!isActionFocused && key === 'ENTER') {
-            if (state.quizState === 'ANSWERING') {
-                handled = true;
-                submitQuizAnswer(false);
-            } else if (state.quizState === 'FEEDBACK') {
-                handled = true;
-                nextQuizQuestion();
+            if (!isActionFocused && key === 'ENTER') {
+                if (state.quizState === 'ANSWERING') {
+                    handled = true;
+                    submitQuizAnswer(false);
+                } else if (state.quizState === 'FEEDBACK') {
+                    handled = true;
+                    nextQuizQuestion();
+                }
             }
         }
 

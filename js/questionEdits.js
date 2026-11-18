@@ -6,6 +6,7 @@ import {
     parseMcqOption,
     safeStorageSet
 } from './utils.js';
+import { purgeQuestionRecords, relocateQuestionRecords } from './storage.js';
 
 export const QUESTION_EDITS_KEY = 'mech_design_question_edits';
 export const QUESTION_ADDITIONS_KEY = 'mech_design_question_additions';
@@ -359,6 +360,7 @@ export function saveQuestionEdit(qid, values) {
 export function saveQuestionAddition(values, qid = '') {
     const targetQid = qid || createLocalQuestionId();
     const existing = state.questionAdditions[targetQid];
+    const prevChapter = existing?.chapter || state.question_lookup[targetQid]?.chapter || '';
     const now = new Date().toISOString();
     const nextAddition = {
         chapter: String(values.chapter || '').trim(),
@@ -374,6 +376,9 @@ export function saveQuestionAddition(values, qid = '') {
     const normalized = normalizeQuestionAddition(nextAddition, targetQid, true);
     state.questionAdditions[targetQid] = normalized;
     applyQuestionAddition(targetQid, normalized);
+    if (prevChapter && prevChapter !== normalized.chapter) {
+        relocateQuestionRecords(targetQid, prevChapter, normalized.chapter);
+    }
     persistQuestionAdditions();
     return targetQid;
 }
@@ -393,6 +398,7 @@ export function discardQuestionAddition(qid) {
     removeRuntimeQuestion(qid);
     delete state.questionAdditions[qid];
     delete state.questionEdits[qid];
+    purgeQuestionRecords(qid);
     persistQuestionChanges();
     return true;
 }
