@@ -517,10 +517,6 @@ body:not(.home-view) .main-container {
     flex: 1;
 }
 
-.mobile-menu-btn {
-    display: none;
-}
-
 .topbar-icon-btn {
     width: 34px;
     height: 34px;
@@ -534,6 +530,9 @@ body:not(.home-view) .main-container {
     cursor: pointer;
     box-shadow: var(--shadow-sm);
     transition: all 0.15s ease;
+}
+.topbar-icon-btn.mobile-menu-btn {
+    display: none;
 }
 .topbar-icon-btn:hover {
     border-color: var(--border-strong);
@@ -2412,7 +2411,7 @@ body.right-sidebar-open #right-sidebar {
     pointer-events: none;
     transition: opacity 0.25s ease;
 }
-body:is(.sidebar-open, .right-sidebar-open, .chapter-drawer-open) .drawer-backdrop {
+body:is(.right-sidebar-open, .chapter-drawer-open) .drawer-backdrop {
     opacity: 1;
     pointer-events: auto;
 }
@@ -2802,7 +2801,11 @@ body.has-wallpaper .workspace-topbar.is-scrolled {
         right: 12px;
         top: 12px;
     }
-    .mobile-menu-btn {
+    body.sidebar-open .drawer-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .topbar-icon-btn.mobile-menu-btn {
         display: inline-grid;
     }
     #main-content {
